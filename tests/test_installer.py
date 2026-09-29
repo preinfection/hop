@@ -4,7 +4,13 @@ customized install, and a clean uninstall. Also checks the built apps.
 
 A customized install writes into this PC's real settings folders (Inno Setup
 can't be pointed elsewhere), so that test backs those files up first and puts
-them back afterwards, whatever happens."""
+them back afterwards, whatever happens.
+
+Every test install also shares the real Hop's registration (same AppId), its
+Start menu folder and its startup shortcuts, and closes the running Hop apps.
+A test uninstall once erased the real install's entry and startup shortcuts,
+so the old pre-Hop copies came back at the next restart. `real_hop` saves all
+of that first and puts it back (and restarts the apps) afterwards."""
 import glob
 import json
 import os
@@ -38,6 +44,56 @@ def uninstall(target):
         if not os.path.exists(un):
             break
         time.sleep(1)
+
+
+UNINSTALL_KEY = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\{8C1B6A52-4E0D-4F3B-9E62-6F0A2B7D1C11}_is1"
+START_MENU = os.path.join(REAL_APPDATA, r"Microsoft\Windows\Start Menu\Programs\Hop")
+OLD_STARTUP = ("Lyrics Island.lnk", "clipper.lnk")         # from before Hop
+SAVED_STARTUP = ("Hop Island.lnk", "Hop Clipper.lnk") + OLD_STARTUP
+
+
+def _running_hop():
+    import psutil
+    out = []
+    for p in psutil.process_iter(["name", "exe"]):
+        if (p.info["name"] or "").lower() in ("hopisland.exe", "hopclipper.exe") and p.info["exe"]:
+            out.append(p.info["exe"])
+    return sorted(set(out))
+
+
+@pytest.fixture(scope="module", autouse=True)
+def real_hop():
+    """The real install's registration, Start menu folder, startup shortcuts
+    and running apps come back exactly as they were after these tests."""
+    tmp = tempfile.mkdtemp(prefix="hop-real-")
+    reg = os.path.join(tmp, "uninstall.reg")
+    had_reg = subprocess.run(["reg", "export", UNINSTALL_KEY, reg, "/y"], capture_output=True).returncode == 0
+    menu = os.path.join(tmp, "menu")
+    if os.path.isdir(START_MENU):
+        shutil.copytree(START_MENU, menu)
+    links = {n: open(os.path.join(STARTUP, n), "rb").read()
+             for n in SAVED_STARTUP if os.path.exists(os.path.join(STARTUP, n))}
+    running = _running_hop()
+    try:
+        yield
+    finally:
+        subprocess.run(["reg", "delete", UNINSTALL_KEY, "/f"], capture_output=True)
+        if had_reg:
+            subprocess.run(["reg", "import", reg], capture_output=True)
+        shutil.rmtree(START_MENU, ignore_errors=True)
+        if os.path.isdir(menu):
+            shutil.copytree(menu, START_MENU)
+        for n in SAVED_STARTUP:
+            path = os.path.join(STARTUP, n)
+            if n in links:
+                open(path, "wb").write(links[n])
+            elif os.path.exists(path):
+                os.remove(path)
+        for exe in running:
+            if exe not in _running_hop():
+                subprocess.Popen([exe], cwd=os.path.dirname(exe), close_fds=True,
+                                 creationflags=0x00000008 | 0x00000200)   # detached, new group
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 @pytest.fixture()
@@ -163,4 +219,71 @@ def test_update_replaces_old_files_keeps_settings(target):
         after = open(island_cfg, "rb").read() if os.path.exists(island_cfg) else None
         assert after == before                            # preferences exactly as they were
     finally:
+        uninstall(target)
+
+
+@need_setup
+@pytest.mark.slow
+def test_update_removes_pre_hop_startup_shortcuts(target):
+    """The startup shortcuts from before Hop (pythonw on the old scripts)
+    are removed, or the old island and clipper come back at the next sign-in."""
+    for n in OLD_STARTUP:
+        open(os.path.join(STARTUP, n), "wb").write(b"old")
+    install(target, "island,clipper")
+    try:
+        for n in OLD_STARTUP:
+            assert not os.path.exists(os.path.join(STARTUP, n)), n
+    finally:
+        uninstall(target)
+
+
+OLD_COPY = r"""
+import ctypes, ctypes.wintypes as wt, sys
+u32 = ctypes.windll.user32
+u32.DefWindowProcW.restype = ctypes.c_ssize_t
+u32.DefWindowProcW.argtypes = [wt.HWND, wt.UINT, wt.WPARAM, wt.LPARAM]
+PROC = ctypes.WINFUNCTYPE(ctypes.c_ssize_t, wt.HWND, wt.UINT, wt.WPARAM, wt.LPARAM)
+def wndproc(h, m, w, l):
+    if m in (0x8004, 0x0312, 0x0010):     # the quit messages: an old copy ignores them
+        return 0
+    return u32.DefWindowProcW(h, m, w, l)
+proc = PROC(wndproc)
+class WNDCLASS(ctypes.Structure):
+    _fields_ = [("style", wt.UINT), ("lpfnWndProc", PROC), ("cbClsExtra", ctypes.c_int),
+                ("cbWndExtra", ctypes.c_int), ("hInstance", wt.HINSTANCE), ("hIcon", wt.HICON),
+                ("hCursor", wt.HANDLE), ("hbrBackground", wt.HBRUSH), ("lpszMenuName", wt.LPCWSTR),
+                ("lpszClassName", wt.LPCWSTR)]
+wc = WNDCLASS(lpfnWndProc=proc, lpszClassName=sys.argv[1])
+u32.RegisterClassW(ctypes.byref(wc))
+u32.CreateWindowExW(0, sys.argv[1], "old copy", 0, 0, 0, 0, 0, None, None, None, None)
+msg = wt.MSG()
+while u32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
+    u32.TranslateMessage(ctypes.byref(msg)); u32.DispatchMessageW(ctypes.byref(msg))
+"""
+
+
+@need_setup
+@pytest.mark.slow
+@pytest.mark.parametrize("window_class", ["lyrics-island-lite", "clipper-tray"])
+def test_update_closes_an_old_copy_that_ignores_quit(target, window_class, tmp_path):
+    """A pre-Hop copy (pythonw, not HopIsland.exe) owns the same window class
+    but doesn't know the quit message: the installer closes it anyway."""
+    import sys
+    script = tmp_path / "old_copy.py"
+    script.write_text(OLD_COPY)
+    old = subprocess.Popen([sys.executable, str(script), window_class])
+    try:
+        for _ in range(50):
+            import ctypes
+            if ctypes.windll.user32.FindWindowW(window_class, "old copy"):
+                break
+            time.sleep(0.1)
+        install(target, "island,clipper")
+        try:
+            old.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pytest.fail("the old copy is still running after the update")
+    finally:
+        if old.poll() is None:
+            old.kill()
         uninstall(target)
