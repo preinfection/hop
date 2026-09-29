@@ -153,8 +153,6 @@ begin
   ModePage.Values[0] := True;
   { /CUSTOMIZE=1 picks "Customize now" (lets the tests run a customized install silently) }
   if ExpandConstant('{param:CUSTOMIZE|0}') = '1' then ModePage.Values[1] := True;
-  { /CUSTOMIZE=1 picks "Customize now" (for testing silent installs) }
-  if ExpandConstant('{param:CUSTOMIZE|0}') = '1' then ModePage.Values[1] := True;
 
   { ---- Hop Island ---- }
   IslandPage := CreateCustomPage(ModePage.ID, 'Hop Island', 'Set up the island');
@@ -267,9 +265,15 @@ end;
 
 { Close running copies first, however they were started: ask each one to
   quit through its own window (the clipper saves a recording in progress),
-  wait, then force-close anything left. }
+  wait, then force-close anything left. The copies from before Hop (pythonw
+  running the scripts) use the same window classes but don't know the
+  island's quit message, and taskkill by .exe name never matched them, so
+  they kept running through the update: the window's own process is closed. }
+function GetWindowThreadProcessId(Wnd: HWND; var ProcessId: DWORD): DWORD;
+  external 'GetWindowThreadProcessId@user32.dll stdcall';
+
 procedure AskToQuit(WindowClass: String; Msg, WParam: Integer);
-var W: HWND; I: Integer;
+var W: HWND; I, Code: Integer; Pid: DWORD;
 begin
   W := FindWindowByClassName(WindowClass);
   if W = 0 then Exit;
@@ -279,6 +283,25 @@ begin
     if FindWindowByClassName(WindowClass) = 0 then Exit;
     Sleep(100);
   end;
+  W := FindWindowByClassName(WindowClass);
+  if W = 0 then Exit;
+  Pid := 0;
+  GetWindowThreadProcessId(W, Pid);
+  if Pid <> 0 then
+    Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /PID ' + IntToStr(Pid), '', SW_HIDE, ewWaitUntilTerminated, Code);
+  for I := 1 to 30 do
+  begin
+    if FindWindowByClassName(WindowClass) = 0 then Exit;
+    Sleep(100);
+  end;
+end;
+
+{ Startup shortcuts from before Hop: they started the old island and clipper
+  again at the next sign-in, on top of (or instead of) the new ones. }
+procedure RemoveOldStartup;
+begin
+  DeleteFile(ExpandConstant('{userstartup}\Lyrics Island.lnk'));
+  DeleteFile(ExpandConstant('{userstartup}\clipper.lnk'));
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
@@ -288,6 +311,7 @@ begin
   AskToQuit('clipper-tray', $0312, 2);          { WM_HOTKEY 2 = Ctrl+Shift+F8, quit }
   Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM HopIsland.exe', '', SW_HIDE, ewWaitUntilTerminated, Code);
   Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM HopClipper.exe', '', SW_HIDE, ewWaitUntilTerminated, Code);
+  RemoveOldStartup;
   Result := '';
 end;
 
