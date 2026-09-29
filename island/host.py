@@ -722,6 +722,8 @@ class Island:
                 got = json.load(fh)
         except (OSError, ValueError):
             return
+        if not isinstance(got, dict):
+            got = {}
         if isinstance(got.get("layout"), dict):
             self.cfg["layout"] = clean_layout({**(self.cfg.get("layout") or {}), **got["layout"]})
         for k in ("prayerMethod", "asrSchool"):
