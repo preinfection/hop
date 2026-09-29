@@ -166,6 +166,8 @@ def settings():
             got = json.load(fh)
     except (OSError, ValueError):
         got = {}
+    if not isinstance(got, dict):                   # a damaged file (a list, null...): defaults
+        got = {}
     out = dict(SETTINGS_DEFAULTS, fps=30 if WEAK_PC else 60)
     out.update({k: v for k, v in got.items() if k in SETTINGS_DEFAULTS and type(v) is type(SETTINGS_DEFAULTS[k])})
     if out["fps"] not in (30, 60, 120):              # 120: for fast PCs on high-refresh screens
