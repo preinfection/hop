@@ -265,10 +265,27 @@ begin
   SaveStringToFile(Dir + '\settings.json', S, False);
 end;
 
-{ Stop running copies first, so their files can be replaced. }
+{ Close running copies first, however they were started: ask each one to
+  quit through its own window (the clipper saves a recording in progress),
+  wait, then force-close anything left. }
+procedure AskToQuit(WindowClass: String; Msg, WParam: Integer);
+var W: HWND; I: Integer;
+begin
+  W := FindWindowByClassName(WindowClass);
+  if W = 0 then Exit;
+  PostMessage(W, Msg, WParam, 0);
+  for I := 1 to 100 do
+  begin
+    if FindWindowByClassName(WindowClass) = 0 then Exit;
+    Sleep(100);
+  end;
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var Code: Integer;
 begin
+  AskToQuit('lyrics-island-lite', $8004, 0);
+  AskToQuit('clipper-tray', $0312, 2);          { WM_HOTKEY 2 = Ctrl+Shift+F8, quit }
   Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM HopIsland.exe', '', SW_HIDE, ewWaitUntilTerminated, Code);
   Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM HopClipper.exe', '', SW_HIDE, ewWaitUntilTerminated, Code);
   Result := '';
