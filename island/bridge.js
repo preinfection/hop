@@ -20,7 +20,7 @@
   // settings window (whose window-moving calls do nothing), and the settings
   // window drives the preview with messages too. Nothing pushes state to it,
   // so it asks for the state every second.
-  const preview = /[?&]preview/.test(location.search);
+  const preview = /[?&]preview=/.test(location.search);
   window.__islandPreview = preview;
   let ready;
   if (preview) {
