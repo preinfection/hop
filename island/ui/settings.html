@@ -50,6 +50,7 @@
   :root[data-theme="light"] .card, :root[data-theme="light"] .status-card { box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
   :root[data-theme="light"] .seg button.on, :root[data-theme="light"] .tabs button.on { box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }   /* .item and friends set display, which would beat [hidden] */
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
     font: 400 13.5px/1.4 "Outfit", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
     -webkit-font-smoothing: antialiased; font-feature-settings: "ss01"; }
