@@ -1125,6 +1125,19 @@ class Island:
             # (seen 2026-09-27: the island fell behind a fullscreen terminal
             # and a browser and looked closed). Once a second: put it back.
             self._top_tick = getattr(self, "_top_tick", 0) + 1
+            if self._top_tick % 60 == 7:
+                # THE GREY BOX: pywebview switches Windows' Mica backdrop back
+                # on whenever Windows sends a theme change, and then the whole
+                # window shows grey behind the open island (seen 2026-09-28).
+                # Every 2 s: if it's back, switch it off again.
+                try:
+                    kind = ctypes.c_int(0)
+                    ctypes.windll.dwmapi.DwmGetWindowAttribute(wt.HWND(self.hwnd), 38, ctypes.byref(kind), 4)
+                    if kind.value not in (0, 1) and getattr(self, "_glass", None):
+                        dbg("backdrop came back:", kind.value, "-> off")
+                        ui_thread(self.window, self._glass)
+                except Exception as e:
+                    dbg("backdrop check", repr(e))
             if self._top_tick % 30 == 15:
                 sig = self.display_signature()
                 last = getattr(self, "_display_sig", None)
