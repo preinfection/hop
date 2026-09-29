@@ -183,6 +183,8 @@ def clipper_settings():
             got = json.load(fh)
     except (OSError, ValueError):
         got = {}
+    if not isinstance(got, dict):
+        got = {}
     return {**CLIPPER_DEFAULTS, **{k: v for k, v in got.items() if k in CLIPPER_DEFAULTS}}
 
 
