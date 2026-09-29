@@ -31,7 +31,7 @@
       if (m.t === "res" && pending.has(m.id)) { pending.get(m.id)(m.v); pending.delete(m.id); }
       else if (m.t === "cmd") { const f = window["__island" + m.fn]; if (f) f(...(m.args || [])); }
     });
-    api = new Proxy({}, { get: (_, name) => (...args) => new Promise((res) => {
+    api = new Proxy({}, { get: (_, name) => name === "then" ? undefined : (...args) => new Promise((res) => {
       const id = ++seq;
       pending.set(id, res);
       window.parent.postMessage({ t: "call", id, name, args }, "*");
