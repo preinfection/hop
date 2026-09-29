@@ -1,0 +1,9 @@
+build/
+ffmpeg/
+__pycache__/
+*.pyc
+*.bak
+*.bak-*
+*.spec
+.venv/
+tests/redact.local.json

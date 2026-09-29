@@ -1,0 +1,14 @@
+pywebview>=6.2
+pythonnet>=3.0
+winrt-runtime>=3.2
+winrt-Windows.Foundation>=3.2
+winrt-Windows.Foundation.Collections>=3.2
+winrt-Windows.Media.Control>=3.2
+winrt-Windows.Storage.Streams>=3.2
+pycaw>=20240316
+comtypes>=1.4
+psutil>=6.0
+SoundCard>=0.4.3
+numpy>=1.26
+Pillow>=10.0
+pyinstaller>=6.0
