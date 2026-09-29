@@ -1438,6 +1438,56 @@ def ui_thread(window, fn):
         fn()
 
 
+def take_over(mutex_name, window_class, quit_msg, quit_wparam=0, wait=8.0):
+    """ONE copy at a time, and the NEWEST one wins: if another copy is running
+    (an update was just installed, or a copy started some other way), ask it
+    to quit, wait for it, and close it by force if it doesn't answer (an older
+    version may not know the message). Returns our mutex handle.
+
+    0.1.0 simply exited when a copy was already running, so after an update
+    the OLD version kept running until the PC restarted."""
+    k32_ = ctypes.windll.kernel32
+    u32_ = ctypes.windll.user32
+    k32_.CreateMutexW.restype = wt.HANDLE
+
+    def grab():
+        h = k32_.CreateMutexW(None, False, mutex_name)
+        if k32_.GetLastError() != 183:              # ERROR_ALREADY_EXISTS
+            return h
+        k32_.CloseHandle(wt.HANDLE(h))
+        return None
+
+    h = grab()
+    if h:
+        return h
+    w = u32_.FindWindowW(window_class, None)
+    if w:
+        u32_.PostMessageW(w, quit_msg, quit_wparam, 0)
+    end = time.time() + wait
+    while time.time() < end:
+        time.sleep(0.1)
+        h = grab()
+        if h:
+            return h
+    if w:                                           # it didn't answer: close it
+        pid = wt.DWORD()
+        u32_.GetWindowThreadProcessId(w, ctypes.byref(pid))
+        proc = k32_.OpenProcess(0x0001, False, pid.value)      # PROCESS_TERMINATE
+        if proc:
+            k32_.TerminateProcess(wt.HANDLE(proc), 0)
+            k32_.CloseHandle(wt.HANDLE(proc))
+    for _ in range(30):
+        time.sleep(0.1)
+        h = grab()
+        if h:
+            return h
+    return None
+
+
+TRAY_CLASS = "lyrics-island-lite" + os.environ.get("HOP_TEST_INSTANCE", "")
+WM_ISLAND_QUIT = 0x8004                              # sent by the installer and by a newer copy
+
+
 def set_startup(on):
     folder = os.path.join(os.environ["APPDATA"], r"Microsoft\Windows\Start Menu\Programs\Startup")
     lnk = os.path.join(folder, "Hop Island.lnk")
@@ -1515,6 +1565,15 @@ def tray(island):
         if msg == 0x8002:                                         # "open settings" (tests, other tools)
             threading.Thread(target=island.open_settings, daemon=True).start()
             return 0
+        if msg == WM_ISLAND_QUIT:                                  # the installer / a newer copy: quit
+            sh32.Shell_NotifyIconW(2, ctypes.byref(nid))
+            island.quitting = True
+            try:
+                island.window.destroy()
+            except Exception:
+                pass
+            u32.PostQuitMessage(0)
+            os._exit(0)
         if msg == 0x8003:                                         # "restart" (the refresh button, for tests)
             threading.Thread(target=island.restart_app, daemon=True).start()
             return 0
@@ -1548,9 +1607,9 @@ def tray(island):
         return u32.DefWindowProcW(hwnd, msg, wparam, lparam)
 
     wndproc = WNDPROC(proc)
-    wc = WNDCLASSW(lpfnWndProc=wndproc, hInstance=k32.GetModuleHandleW(None), lpszClassName="lyrics-island-lite")
+    wc = WNDCLASSW(lpfnWndProc=wndproc, hInstance=k32.GetModuleHandleW(None), lpszClassName=TRAY_CLASS)
     u32.RegisterClassW(ctypes.byref(wc))
-    hwnd = u32.CreateWindowExW(0, "lyrics-island-lite", "Lyrics Island", 0, 0, 0, 0, 0, None, None, wc.hInstance, None)
+    hwnd = u32.CreateWindowExW(0, TRAY_CLASS, "Lyrics Island", 0, 0, 0, 0, 0, None, None, wc.hInstance, None)
     nid = NID(cbSize=ctypes.sizeof(NID), hWnd=hwnd, uID=1, uFlags=1 | 2 | 4, uCallbackMessage=0x8001,
               hIcon=u32.LoadImageW(None, ICON, 1, 0, 0, 0x10 | 0x40))
     nid.szTip = APP_NAME
@@ -1573,8 +1632,11 @@ def main():
             pass
     # One island at a time.
     # (HOP_TEST_INSTANCE: tests/test_startup.py runs a second island beside yours)
-    ctypes.windll.kernel32.CreateMutexW(None, False, "Local\\lyrics-island-lite" + os.environ.get("HOP_TEST_INSTANCE", ""))
-    if ctypes.windll.kernel32.GetLastError() == 183:
+    # One island at a time, and the newest wins (see take_over).
+    # (HOP_TEST_INSTANCE: the tests run their own islands beside yours)
+    global _MUTEX
+    _MUTEX = take_over("Local\\lyrics-island-lite" + os.environ.get("HOP_TEST_INSTANCE", ""), TRAY_CLASS, WM_ISLAND_QUIT, wait=3.0)
+    if not _MUTEX:
         return
     try:
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("Hop.Island")

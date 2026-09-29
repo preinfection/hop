@@ -422,6 +422,55 @@ def _ffmpeg_mb(ff):
         return 0
 
 
+def take_over(mutex_name, window_class, quit_msg, quit_wparam=0, wait=8.0):
+    """ONE copy at a time, and the NEWEST one wins: if another copy is running
+    (an update was just installed, or a copy started some other way), ask it
+    to quit, wait for it, and close it by force if it doesn't answer (an older
+    version may not know the message). Returns our mutex handle.
+
+    0.1.0 simply exited when a copy was already running, so after an update
+    the OLD version kept running until the PC restarted."""
+    k32_ = ctypes.windll.kernel32
+    u32_ = ctypes.windll.user32
+    k32_.CreateMutexW.restype = wt.HANDLE
+
+    def grab():
+        h = k32_.CreateMutexW(None, False, mutex_name)
+        if k32_.GetLastError() != 183:              # ERROR_ALREADY_EXISTS
+            return h
+        k32_.CloseHandle(wt.HANDLE(h))
+        return None
+
+    h = grab()
+    if h:
+        return h
+    w = u32_.FindWindowW(window_class, None)
+    if w:
+        u32_.PostMessageW(w, quit_msg, quit_wparam, 0)
+    end = time.time() + wait
+    while time.time() < end:
+        time.sleep(0.1)
+        h = grab()
+        if h:
+            return h
+    if w:                                           # it didn't answer: close it
+        pid = wt.DWORD()
+        u32_.GetWindowThreadProcessId(w, ctypes.byref(pid))
+        proc = k32_.OpenProcess(0x0001, False, pid.value)      # PROCESS_TERMINATE
+        if proc:
+            k32_.TerminateProcess(wt.HANDLE(proc), 0)
+            k32_.CloseHandle(wt.HANDLE(proc))
+    for _ in range(30):
+        time.sleep(0.1)
+        h = grab()
+        if h:
+            return h
+    return None
+
+
+TRAY_CLASS = "clipper-tray" + os.environ.get("HOP_TEST_INSTANCE", "")
+
+
 def stop_ffmpeg(ff, wait=3.0):
     """Stop a recorder CLEANLY: close its sound input and let it finish the
     current piece. Killing it outright left that piece cut off mid-frame, and
@@ -1888,9 +1937,11 @@ def main():
     # ONE clipper at a time. It starts with Windows now, so running start.bat
     # as well used to throw an "F8 is already used" error box; a second copy
     # now just leaves quietly (the first one is already recording).
-    k32.CreateMutexW.restype = wt.HANDLE
-    mutex = k32.CreateMutexW(None, False, "Local\\clipper-bunny")
-    if k32.GetLastError() == 183:                   # ERROR_ALREADY_EXISTS
+    # ...and the NEWEST copy wins: an older one is asked to quit the way
+    # Ctrl+Shift+F8 does (every version knows it, and a full recording in
+    # progress is still saved), then closed by force if it doesn't answer.
+    mutex = take_over("Local\\clipper-bunny" + os.environ.get("HOP_TEST_INSTANCE", ""), TRAY_CLASS, WM_HOTKEY, 2, wait=12.0)
+    if not mutex:
         sys.exit(0)
     toast = Toast()
     later_this_session = []                          # "Later" pressed: quiet until the PC restarts
@@ -2030,9 +2081,9 @@ def main():
         return u32.DefWindowProcW(hwnd, msg, wparam, lparam)
 
     proc = WNDPROC(wndproc)                       # kept referenced for the program's life
-    wc = WNDCLASSW(lpfnWndProc=proc, hInstance=k32.GetModuleHandleW(None), lpszClassName="clipper-tray")
+    wc = WNDCLASSW(lpfnWndProc=proc, hInstance=k32.GetModuleHandleW(None), lpszClassName=TRAY_CLASS)
     u32.RegisterClassW(ctypes.byref(wc))
-    hwnd = u32.CreateWindowExW(0, "clipper-tray", "clipper", 0, 0, 0, 0, 0, None, None, wc.hInstance, None)
+    hwnd = u32.CreateWindowExW(0, TRAY_CLASS, "clipper", 0, 0, 0, 0, 0, None, None, wc.hInstance, None)
 
     if not u32.RegisterHotKey(hwnd, 1, 0, VK_F8) or not u32.RegisterHotKey(hwnd, 2, MOD_CONTROL | MOD_SHIFT, VK_F8):
         winsound.Beep(300, 400)
