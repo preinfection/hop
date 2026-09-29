@@ -50,7 +50,8 @@ def _fetch_month(year, month):
 def _load_month(year, month):
     try:
         with open(_path(year, month), encoding="utf-8") as fh:
-            return json.load(fh)
+            got = json.load(fh)
+        return got if isinstance(got, dict) else None       # a damaged file: fetch again
     except (OSError, ValueError):
         return None
 
