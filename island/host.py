@@ -200,7 +200,8 @@ def clipper_state():
 def read_config():
     try:
         with open(CONFIG, encoding="utf-8") as fh:
-            return {**DEFAULTS, **json.load(fh)}
+            got = json.load(fh)
+        return {**DEFAULTS, **(got if isinstance(got, dict) else {})}   # a damaged file: defaults
     except (OSError, ValueError):
         return dict(DEFAULTS)
 
