@@ -49,7 +49,15 @@
       tip.classList.add("on");
     }, 350);
   });
-  document.addEventListener("mouseout", (e) => { if (cur && !cur.contains(e.relatedTarget)) hide(); });
+  // Hide only when the pointer has really left the element. Something sliding
+  // in under a still pointer (the volume slider opening under the speaker)
+  // also fires mouseout, and used to cancel the tip before it showed.
+  document.addEventListener("mouseout", (e) => {
+    if (!cur || cur.contains(e.relatedTarget)) return;
+    const r = cur.getBoundingClientRect();
+    if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) return;
+    hide();
+  });
   document.addEventListener("mousedown", hide, true);
   window.addEventListener("blur", hide);
 })();
