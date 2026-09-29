@@ -811,26 +811,35 @@
       sw.live = true;
       try { island.setPointerCapture(sw.id); } catch {}
       island.classList.add("swiping");
+      sw.el = island.querySelector(sw.target === "alert" ? ".alert" : ".card");
     }
     dy = dy < 0 ? dy : dy * 0.2;                          // downward: a stiff rubber band
     const now = performance.now();
     sw.v = (dy - sw.dy) / Math.max(1, now - sw.lastT);    // speed of the LAST move (px/ms), like a phone
     sw.lastT = now;
     sw.dy = dy;
-    const k = Math.max(-1, Math.min(0, dy) / 110);         // 0 .. -1 as it goes up
-    island.style.transform = `translateY(${(dy * 0.32).toFixed(1)}px) scale(${(1 + k * 0.1).toFixed(3)}, ${(1 + k * 0.22).toFixed(3)})`;
-    island.style.setProperty("--swipe-fade", String(Math.max(0, 1 + k * 1.4).toFixed(3)));
+    // SMOOTH: drawn at most once per frame, and only transform + opacity
+    // (the GPU moves them; nothing is laid out again). A CSS variable here
+    // re-styled the whole island on every mouse event and made it lag.
+    if (!sw.frame) sw.frame = requestAnimationFrame(() => {
+      if (!sw) return;
+      sw.frame = 0;
+      const k = Math.max(-1, Math.min(0, sw.dy) / 110);     // 0 .. -1 as it goes up
+      island.style.transform = `translate3d(0, ${(sw.dy * 0.32).toFixed(1)}px, 0) scale(${(1 + k * 0.1).toFixed(3)}, ${(1 + k * 0.22).toFixed(3)})`;
+      if (sw.el) sw.el.style.opacity = Math.max(0, 1 + k * 1.4).toFixed(3);
+    });
   });
   function endSwipe() {
     if (!sw) return;
     if (!sw.live) { sw = null; return; }                    // it was a click
     const fresh = performance.now() - sw.lastT < 90;           // still moving when let go
     const go = sw.dy < -26 || (fresh && sw.v < -0.2 && sw.dy < -8);    // far enough, or a flick
-    const target = sw.target;
+    const target = sw.target, el = sw.el;
+    if (sw.frame) cancelAnimationFrame(sw.frame);
     sw = null;
     island.classList.remove("swiping");
     island.style.transform = "";
-    island.style.removeProperty("--swipe-fade");
+    if (el) el.style.opacity = "";
     if (!go) return;                                          // not far enough: springs back
     island.classList.add("swipe-away");
     setTimeout(() => island.classList.remove("swipe-away"), 560);
