@@ -231,7 +231,8 @@ def render(state, s=1.0):
 
     # the length picker: a segmented control inside the same card
     if picker:
-        d.line([(m + P(14), m + P(H)), (m + cw - P(14), m + P(H))], fill=(255, 255, 255, 16), width=max(1, P(1)))
+        # no dividing line: the picker is part of the same card (a line there
+        # showed the desktop through as a thin seam)
         x0, y0 = m + P(14), m + P(H + 6)
         tw, th = cw - P(28), P(30)
         img.alpha_composite(_pill(tw, th, (255, 255, 255, 18)), (x0, y0))
