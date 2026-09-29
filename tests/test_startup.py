@@ -119,3 +119,41 @@ def test_first_copy_gets_the_lock(app):
     h = mod.take_over(f"Local\\hop-test-{app}-first", f"hop-test-{app}-none", 0x8004, 0, wait=1.0)
     assert h
     ctypes.windll.kernel32.CloseHandle(h)
+
+
+@pytest.mark.slow
+def test_grey_backdrop_is_switched_off_again(sandbox):
+    """Windows' Mica backdrop (the grey box around the open island) is switched
+    back on by the window library on theme changes; the island turns it off."""
+    import ctypes
+    temp = os.path.join(sandbox, "backdrop")
+    os.makedirs(temp, exist_ok=True)
+    p = _start_island("-backdrop", temp)
+    try:
+        time.sleep(10)
+        u, d = ctypes.windll.user32, ctypes.windll.dwmapi
+        import psutil
+        hwnds = []
+
+        @ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+        def each(h, _):
+            pid = ctypes.c_ulong()
+            u.GetWindowThreadProcessId(ctypes.c_void_p(h), ctypes.byref(pid))
+            buf = ctypes.create_unicode_buffer(64)
+            u.GetWindowTextW(ctypes.c_void_p(h), buf, 64)
+            if pid.value == p.pid and buf.value == "Lyrics Island" and u.IsWindowVisible(ctypes.c_void_p(h)):
+                hwnds.append(h)
+            return True
+        u.EnumWindows(each, 0)
+        assert hwnds, "the test island's window wasn't found"
+        h = ctypes.c_void_p(hwnds[0])
+        d.DwmSetWindowAttribute(h, 38, ctypes.byref(ctypes.c_int(2)), 4)       # Mica on, as a theme change does
+        kind = ctypes.c_int(-1)
+        for _ in range(10):
+            time.sleep(0.5)
+            d.DwmGetWindowAttribute(h, 38, ctypes.byref(kind), 4)
+            if kind.value == 1:
+                break
+        assert kind.value == 1, f"the backdrop stayed on ({kind.value})"
+    finally:
+        p.kill()
