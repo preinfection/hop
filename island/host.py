@@ -1501,12 +1501,20 @@ TRAY_CLASS = "lyrics-island-lite" + os.environ.get("HOP_TEST_INSTANCE", "")
 WM_ISLAND_QUIT = 0x8004                              # sent by the installer and by a newer copy
 
 
+def remove_old_startup():
+    """The startup shortcut from before Hop ("Lyrics Island.lnk", pythonw on
+    the old script) brought the old island back at every sign-in."""
+    old = os.path.join(os.environ["APPDATA"], r"Microsoft\Windows\Start Menu\Programs\Startup", "Lyrics Island.lnk")
+    try:
+        os.remove(old)
+    except OSError:
+        pass
+
+
 def set_startup(on):
     folder = os.path.join(os.environ["APPDATA"], r"Microsoft\Windows\Start Menu\Programs\Startup")
     lnk = os.path.join(folder, "Hop Island.lnk")
-    old = os.path.join(folder, "Lyrics Island.lnk")          # the name before Hop
-    if os.path.exists(old):
-        os.remove(old)
+    remove_old_startup()
     if not on:
         if os.path.exists(lnk):
             os.remove(lnk)
@@ -1643,14 +1651,13 @@ def main():
             old.wait(timeout=10)
         except Exception:
             pass
-    # One island at a time.
-    # (HOP_TEST_INSTANCE: tests/test_startup.py runs a second island beside yours)
     # One island at a time, and the newest wins (see take_over).
     # (HOP_TEST_INSTANCE: the tests run their own islands beside yours)
     global _MUTEX
     _MUTEX = take_over("Local\\lyrics-island-lite" + os.environ.get("HOP_TEST_INSTANCE", ""), TRAY_CLASS, WM_ISLAND_QUIT, wait=3.0)
     if not _MUTEX:
         return
+    remove_old_startup()
     try:
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("Hop.Island")
     except Exception:

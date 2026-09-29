@@ -1943,6 +1943,12 @@ def main():
     mutex = take_over("Local\\clipper-bunny" + os.environ.get("HOP_TEST_INSTANCE", ""), TRAY_CLASS, WM_HOTKEY, 2, wait=12.0)
     if not mutex:
         sys.exit(0)
+    # The startup shortcut from before Hop (pythonw on the old clipper.py)
+    # brought the old clipper back at every sign-in.
+    try:
+        os.remove(os.path.join(os.environ["APPDATA"], r"Microsoft\Windows\Start Menu\Programs\Startup", "clipper.lnk"))
+    except OSError:
+        pass
     toast = Toast()
     later_this_session = []                          # "Later" pressed: quiet until the PC restarts
 
