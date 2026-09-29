@@ -74,6 +74,8 @@ def today():
             cache = json.load(fh)
     except (OSError, ValueError):
         cache = {}
+    if not isinstance(cache, dict):
+        cache = {}
     changed = False
     if time.time() - (cache.get("weather") or {}).get("at", 0) > 1800:
         try:
