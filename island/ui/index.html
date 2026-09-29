@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Island</title>
+    <link rel="stylesheet" href="./island.css" />
+  </head>
+  <body>
+    <div class="island empty" id="island">
+      <!-- compact: iPhone-size pill, artwork left, waveform right -->
+      <div class="mini">
+        <img class="mini-art" id="miniArt" alt="" />
+        <span class="clock" id="clock"></span>
+        <!-- while the clipper records: the recording's length, red and shining -->
+        <span class="rec-time" id="recTime"></span>
+        <!-- 15 minutes before a prayer: "Asr · 12m" -->
+        <span class="pray-time" id="prayTime"></span>
+        <div class="bars" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      </div>
+
+      <!-- a short live activity on the closed pill: charging, low battery, Bluetooth -->
+      <div class="act-view" id="actView"></div>
+
+      <!-- an expanded card: clip saved (Open / Copy), drop a file to upload -->
+      <div class="card" id="card"></div>
+
+      <!-- opens on hover. Two pages: scroll down for Today, up for the player -->
+      <div class="full">
+        <div class="pg pg-music on" data-id="music">
+        <div class="head">
+          <!-- record button: starts / stops a full recording in the clipper -->
+          <button class="rec" id="rec" aria-label="Start recording" title="Record the screen (clipper)">
+            <span class="rec-ring"></span>
+            <span class="rec-dot"></span>
+          </button>
+          <!-- or the album cover, if chosen in settings -->
+          <img class="head-art" id="headArt" alt="" />
+          <div class="meta">
+            <div class="title mq"><div class="mq-track"><span class="mq-a"><span id="title"></span><span class="by" id="by"></span></span></div></div>
+            <div class="artist mq"><div class="mq-track"><span class="mq-a" id="artist"></span></div></div>
+            <div class="lyric" id="lyric"></div>
+          </div>
+          <!-- the next prayer (the city from settings) -->
+          <div class="next-prayer" id="nextPrayer">
+            <span class="np-name" id="npName"></span>
+            <span class="np-time" id="npTime"></span>
+          </div>
+          <!-- or music bars / the time, if chosen in settings -->
+          <div class="bars head-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+          <span class="head-clock" id="headClock"></span>
+        </div>
+        <div class="progress" id="progress">
+          <span class="time" id="cur">0:00</span>
+          <div class="rail"><div class="fill" id="fill"></div></div>
+          <span class="time" id="left">-0:00</span>
+        </div>
+        <!-- Spotify's own volume: hover the speaker and the island grows down to
+             show the slider; click the speaker to mute. -->
+        <button id="volBtn" class="vol-btn" aria-label="Mute or unmute" title="Volume">
+          <svg viewBox="0 0 24 24">
+            <path class="spk" d="M3.5 9.2h3.6L12 5v14l-4.9-4.2H3.5z" />
+            <path class="w1" d="M15 9.2a4 4 0 0 1 0 5.6" />
+            <path class="w2" d="M17.6 6.6a7.6 7.6 0 0 1 0 10.8" />
+            <path class="x" d="m15.5 9.5 5 5m0-5-5 5" />
+          </svg>
+        </button>
+        <div class="vol-row" id="volRow">
+          <div class="vol-rail" id="volRail">
+            <div class="vol-fill" id="volFill"></div>
+            <div class="vol-knob" id="volKnob"></div>
+          </div>
+          <span class="vol-pct" id="volPct">100</span>
+        </div>
+        <button id="center" class="center" aria-label="Snap to top middle" title="Snap to top middle">
+          <svg viewBox="0 0 24 24"><path d="M4 3.5h16v2H4zM12 8l5 5h-4v7.5h-2V13H7l5-5Z" /></svg>
+        </button>
+        <div class="controls">
+          <button id="prev" aria-label="Previous">
+            <svg viewBox="0 0 24 24"><path d="M11.5 12 20 6.2v11.6L11.5 12Zm-8 0L12 6.2v11.6L3.5 12Z" /></svg>
+          </button>
+          <button id="play" class="play" aria-label="Play or pause">
+            <svg class="i-play" viewBox="0 0 24 24"><path d="M7 4.8v14.4L19 12 7 4.8Z" /></svg>
+            <svg class="i-pause" viewBox="0 0 24 24"><path d="M6.5 4.5h3.8v15H6.5zm7.2 0h3.8v15h-3.8z" /></svg>
+          </button>
+          <button id="next" aria-label="Next">
+            <svg viewBox="0 0 24 24"><path d="M12.5 12 4 17.8V6.2l8.5 5.8Zm8 0L12 17.8V6.2l8.5 5.8Z" /></svg>
+          </button>
+        </div>
+        </div>
+
+        <!-- page 2: Hijri date, Ramadan / Eid, weather, today's prayers -->
+        <div class="pg pg-today" data-id="today">
+          <div class="today">
+            <div class="today-l">
+              <div class="hij" id="hij"></div>
+              <div class="evt" id="evts"></div>
+            </div>
+            <div class="today-r">
+              <div class="bigtemp" id="wxTemp"></div>
+              <div class="evt" id="wxDetail"></div>
+            </div>
+          </div>
+          <div class="strip" id="strip"></div>
+        </div>
+        <!-- page 3: the newest clips; hover plays, click opens, copy puts the file on the clipboard -->
+        <div class="pg pg-clips" data-id="clips">
+          <div class="pg-head"><span>Recent clips</span><button class="link" id="clipsFolder">Open folder</button></div>
+          <div class="thumbs" id="thumbs"></div>
+        </div>
+
+        <!-- page 4: PC load and ping (click the ping for a speed test) -->
+        <div class="pg pg-pc" data-id="pc">
+          <div class="gauges" id="gauges">
+            <div class="g" data-k="cpu"><div class="gring" style="--c:#0a84ff"><span>–</span></div><div class="gl">CPU</div></div>
+            <div class="g" data-k="gpu"><div class="gring" style="--c:#bf5af2"><span>–</span></div><div class="gl">GPU</div></div>
+            <div class="g" data-k="ram"><div class="gring" style="--c:#30d158"><span>–</span></div><div class="gl">RAM</div></div>
+            <div class="g" data-k="diskC"><div class="gring" style="--c:#ff9f0a"><span>–</span></div><div class="gl">Drive free</div></div>
+            <div class="g" data-k="diskE"><div class="gring" style="--c:#ff9f0a"><span>–</span></div><div class="gl">Drive free</div></div>
+            <div class="g" data-k="ping"><button class="gring pingring" id="aPing" title="Click for a speed test" style="--c:#30d158"><span>–</span></button><div class="gl" id="pingLabel">Ping</div></div>
+          </div>
+        </div>
+        <div class="pg-dots"><i class="on"></i><i></i><i></i><i></i></div>
+        <!-- on the last page: restarts the island (if it ever gets stuck) -->
+        <button id="reload" class="gear reload" aria-label="Refresh the island" title="Refresh the island">
+          <svg viewBox="0 0 24 24"><path d="M12 4.5a7.5 7.5 0 1 0 7.3 9.2h-2.1A5.5 5.5 0 1 1 12 6.5c1.5 0 2.9.6 3.9 1.6L13 11h7V4l-2.6 2.6A7.5 7.5 0 0 0 12 4.5Z" /></svg>
+        </button>
+        <!-- on the last page: opens the settings app -->
+        <button id="gear" class="gear" aria-label="Island settings" title="Island settings">
+          <svg viewBox="0 0 24 24"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-1.7-1L15 3.5h-4l-.4 2.5a7.4 7.4 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7.4 7.4 0 0 0 1.7 1l.4 2.5h4l.4-2.5a7.4 7.4 0 0 0 1.7-1l2.4 1 2-3.4-2-1.6ZM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" transform="translate(-1 0)" /></svg>
+        </button>
+      </div>
+
+      <!-- prayer alarm: the island opens by itself, chimes, then goes back -->
+      <div class="alert" id="alert">
+        <svg class="al-moon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M20.3 14.6A8.6 8.6 0 0 1 9.4 3.7a8.6 8.6 0 1 0 10.9 10.9Z" />
+        </svg>
+        <div class="al-text">
+          <div class="al-name" id="alName"></div>
+          <div class="al-sub" id="alSub"></div>
+        </div>
+        <button class="al-stop" id="alStop">Dismiss</button>
+      </div>
+    </div>
+    <script src="./config.js"></script>
+    <script src="./bridge.js"></script>
+    <script src="./island.js"></script>
+    <script src="./tip.js"></script>
+  </body>
+</html>
