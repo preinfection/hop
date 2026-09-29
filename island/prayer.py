@@ -79,7 +79,9 @@ def _day(date):
     if LAT is None:
         return None
     cached = _load_month(date.year, date.month)
-    return (cached or {}).get("days", {}).get(date.isoformat())
+    days = (cached or {}).get("days")
+    day = days.get(date.isoformat()) if isinstance(days, dict) else None
+    return day if isinstance(day, dict) else None
 
 
 def today_and_tomorrow():
