@@ -1,0 +1,725 @@
+<!doctype html>
+<html lang="en" data-theme="system">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Hop Island</title>
+<style>
+  @font-face { font-family: "Inter Island"; src: url("./fonts/inter-var.woff2") format("woff2"); font-weight: 100 900; }
+  /* the app's text: Outfit; the Hop wordmark: Syne (both Google Fonts, OFL; see fonts/*-OFL.txt) */
+  @font-face { font-family: "Outfit"; src: url("./fonts/Outfit.ttf") format("truetype"); font-weight: 100 900; }
+  @font-face { font-family: "Syne"; src: url("./fonts/Syne.ttf") format("truetype"); font-weight: 400 800; }
+  /* THEME: dark by default; light when the system is light (theme "system")
+     or when picked. <html data-theme="light|dark|system"> is set from the layout. */
+  :root {
+    --bg: #0b0b0d; --panel: #141417; --row: #1b1b1f; --line: rgba(255,255,255,0.07);
+    --text: #f2f2f5; --dim: rgba(235,235,245,0.58); --faint: rgba(235,235,245,0.32);
+    --blue: #0a84ff; --red: #ff453a; --green: #30d158;
+    --field: #0e0e11; --hover: #26262b; --tab-on: #2c2c31; --seg-on: #3a3a40; --sw-off: #3a3a3f;
+    --strong: #fff; --chip-on-bg: #fff; --chip-on-fg: #000;
+    --thumb: rgba(255,255,255,0.14); --thumb-hover: rgba(255,255,255,0.3);
+    --stage: radial-gradient(120% 90% at 50% 0%, #2a2f3a 0%, #15171c 55%, #0e0f12 100%);
+    --tip-bg: rgba(28,28,32,0.96); --tip-fg: #f2f2f5; --tip-line: rgba(255,255,255,0.1);
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --bg: #f5f5f7; --panel: #ffffff; --row: #ececf0; --line: rgba(0,0,0,0.08);
+    --text: #1d1d1f; --dim: rgba(60,60,67,0.72); --faint: rgba(60,60,67,0.45);
+    --blue: #007aff; --red: #d70015; --green: #34c759;
+    --field: #eeeef2; --hover: #e2e2e7; --tab-on: #ffffff; --seg-on: #ffffff; --sw-off: #d1d1d6;
+    --strong: #000; --chip-on-bg: #1d1d1f; --chip-on-fg: #fff;
+    --thumb: rgba(0,0,0,0.18); --thumb-hover: rgba(0,0,0,0.35);
+    --stage: radial-gradient(120% 90% at 50% 0%, #dfe4ee 0%, #cfd4de 55%, #c2c7d1 100%);
+    --tip-bg: rgba(255,255,255,0.97); --tip-fg: #1d1d1f; --tip-line: rgba(0,0,0,0.1);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: light) {
+    :root[data-theme="system"] {
+      --bg: #f5f5f7; --panel: #ffffff; --row: #ececf0; --line: rgba(0,0,0,0.08);
+      --text: #1d1d1f; --dim: rgba(60,60,67,0.72); --faint: rgba(60,60,67,0.45);
+      --blue: #007aff; --red: #d70015; --green: #34c759;
+      --field: #eeeef2; --hover: #e2e2e7; --tab-on: #ffffff; --seg-on: #ffffff; --sw-off: #d1d1d6;
+      --strong: #000; --chip-on-bg: #1d1d1f; --chip-on-fg: #fff;
+      --thumb: rgba(0,0,0,0.18); --thumb-hover: rgba(0,0,0,0.35);
+      --stage: radial-gradient(120% 90% at 50% 0%, #dfe4ee 0%, #cfd4de 55%, #c2c7d1 100%);
+      --tip-bg: rgba(255,255,255,0.97); --tip-fg: #1d1d1f; --tip-line: rgba(0,0,0,0.1);
+      color-scheme: light;
+    }
+  }
+  .light-shadow { box-shadow: none; }
+  :root[data-theme="light"] .card, :root[data-theme="light"] .status-card { box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+  :root[data-theme="light"] .seg button.on, :root[data-theme="light"] .tabs button.on { box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 400 13.5px/1.4 "Outfit", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased; font-feature-settings: "ss01"; }
+  body { display: grid; grid-template-rows: auto 1fr; overflow: hidden; }
+  button { font: inherit; color: inherit; }
+
+  /* ---- header: the bunny, then "Hop Island" / "Hop Clipper" */
+  header { display: flex; align-items: center; gap: 18px; padding: 12px 20px; border-bottom: 1px solid var(--line); }
+  /* the wordmark is one image (bunny + name), made by hop-build/make_wordmarks.py
+     from the hand-placed layout, so it matches the README headers exactly */
+  .brand { display: flex; align-items: center; min-width: 170px; }
+  .brand img { height: 30.33px; width: auto; display: block; }
+  .brand-text { font-family: "Syne", "Outfit", "Segoe UI Variable Display", system-ui, sans-serif;
+    font-size: 21px; font-weight: 700; letter-spacing: -0.01em; line-height: 1;
+    position: relative; top: 5px;   /* lines the letters up with the bunny's face, not its ears */ }
+  .tabs { display: inline-flex; background: var(--field); border-radius: 10px; padding: 3px; }
+  .tabs button { border: 0; background: transparent; padding: 7px 16px; border-radius: 8px; cursor: pointer; color: var(--dim); font-weight: 500; font-size: 14px; }
+  .tabs button.on { background: var(--tab-on); color: var(--strong); }
+  .tabs button[hidden] { display: none; }
+  #status { color: var(--faint); font-size: 12px; transition: color 200ms ease; }
+  #status.saved { color: var(--green); }
+  .spacer { flex: 1; }
+  .btn { border: 0; background: var(--row); padding: 7px 12px; border-radius: 8px; cursor: pointer; }
+  .btn:hover { background: var(--hover); }
+  .btn:disabled { opacity: 0.35; cursor: default; }
+  .btn.warn { color: var(--red); }
+  .btn.primary { background: var(--blue); color: #fff; }
+
+  main { display: grid; grid-template-columns: 500px 1fr; min-height: 0; }
+  main[hidden] { display: none; }
+
+  /* ---- left column */
+  .side { padding: 22px 22px 22px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 14px;
+    min-height: 0; overflow-y: auto; }
+  .side > * { flex: 0 0 auto; }            /* nothing squashes the preview; the column scrolls instead */
+  .stage { position: relative; height: 262px; border-radius: 16px; overflow: hidden;
+    background: var(--stage); }
+  .stage iframe { position: absolute; left: 50%; top: 14px; width: 360px; height: 196px; border: 0;
+    transform: translateX(-50%) scale(1.2); transform-origin: 50% 0; background: transparent; }
+  .row-inline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .hint { color: var(--faint); font-size: 12px; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { border: 0; background: var(--row); padding: 6px 11px; border-radius: 999px; cursor: pointer; color: var(--dim); }
+  .chip.on { background: var(--chip-on-bg); color: var(--chip-on-fg); font-weight: 600; }
+  .toc { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+  .toc a { color: var(--dim); text-decoration: none; padding: 6px 10px; border-radius: 8px; font-size: 14px; }
+  .toc a:hover { background: var(--row); color: var(--strong); }
+
+  /* clipper status card */
+  .status-card { background: var(--panel); border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+  .status-card .top { display: flex; align-items: center; gap: 12px; }
+  .status-card img { width: 44px; height: 44px; object-fit: contain; }
+  .status-card b { font-size: 15px; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: var(--faint); }
+  .dot.on { background: var(--green); box-shadow: 0 0 8px var(--green); }
+
+  /* ---- right column */
+  .panel { overflow-y: auto; padding: 22px 26px 60px; scroll-behavior: smooth; }
+  section { margin-bottom: 26px; }
+  section h2 { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.12em; color: var(--faint); margin: 0 0 9px 2px; }
+  .card { background: var(--panel); border-radius: 12px; overflow: hidden; }
+  .item { display: flex; align-items: center; gap: 12px; padding: 11px 14px; min-height: 46px; }
+  .item + .item { border-top: 1px solid var(--line); }
+  .item .label { flex: 1; min-width: 0; }
+  .item .label b { display: block; font-weight: 500; font-size: 14px; letter-spacing: 0.005em; }
+  .item .label span { color: var(--dim); font-size: 12.5px; font-weight: 300; letter-spacing: 0.01em; }
+
+  .sw { position: relative; width: 40px; height: 24px; flex: 0 0 auto; }
+  .sw input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+  .sw i { position: absolute; inset: 0; border-radius: 12px; background: var(--sw-off); transition: background 160ms ease; pointer-events: none; }
+  .sw i::after { content: ""; position: absolute; left: 2px; top: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff;
+    transition: transform 200ms cubic-bezier(.3,1.3,.5,1); box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+  .sw input:checked + i { background: var(--green); }
+  .sw input:checked + i::after { transform: translateX(16px); }
+  .sw input:focus-visible + i { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+  .seg { display: inline-flex; background: var(--field); border-radius: 9px; padding: 2px; flex: 0 0 auto; }
+  .seg button { border: 0; background: transparent; padding: 6px 11px; border-radius: 7px; cursor: pointer; color: var(--dim); white-space: nowrap; }
+  .seg button.on { background: var(--seg-on); color: var(--strong); font-weight: 500; }
+
+  .pg-row { cursor: grab; }
+  .pg-row.dragging { opacity: 0.4; }
+  .pg-row.over { box-shadow: inset 0 2px 0 var(--blue); }
+  .grip { color: var(--faint); font-size: 14px; letter-spacing: -2px; user-select: none; }
+  .pg-row.off .label b, .pg-row.off .label span { opacity: 0.45; }
+  .mv { border: 0; background: transparent; width: 28px; height: 28px; border-radius: 7px; cursor: pointer; color: var(--dim); }
+  .mv:hover:not(:disabled) { background: var(--hover); color: var(--strong); }
+  .mv:disabled { opacity: 0.2; cursor: default; }
+
+  input[type=range] { width: 220px; accent-color: var(--blue); }
+  .val { width: 52px; text-align: right; font-variant-numeric: tabular-nums; color: var(--dim); }
+  .field { flex: 1; min-width: 0; background: var(--field); border: 1px solid var(--line); border-radius: 9px; color: var(--text);
+    font: inherit; padding: 8px 11px; outline: none; }
+  .field:focus { border-color: rgba(10,132,255,0.6); }
+  select.field { flex: 0 0 auto; max-width: 260px; cursor: pointer; }
+  .results { display: flex; flex-direction: column; }
+  .results button { all: unset; cursor: pointer; padding: 10px 14px; border-top: 1px solid var(--line); color: var(--dim); }
+  .results button:hover { background: var(--row); color: var(--strong); }
+  .path { color: var(--dim); font-size: 12.5px; word-break: break-all; }
+
+  /* ---- scrollbars: a thin rounded thumb, no arrows, no track; it brightens on hover */
+  * { scrollbar-width: auto; }
+  ::-webkit-scrollbar { width: 12px; height: 12px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-button { display: none; height: 0; }
+  ::-webkit-scrollbar-thumb { background: var(--thumb); border-radius: 999px;
+    border: 4px solid transparent; background-clip: padding-box; min-height: 48px; }
+  ::-webkit-scrollbar-thumb:hover { background-color: var(--thumb-hover); border-width: 3px; }
+  ::-webkit-scrollbar-thumb:active { background-color: rgba(10,132,255,0.75); border-width: 3px; }
+  ::-webkit-scrollbar-corner { background: transparent; }
+  .panel { scrollbar-gutter: stable; }
+  /* a smaller window: a narrower left column and a slightly smaller preview */
+  @media (max-width: 1000px) {
+    main { grid-template-columns: 420px 1fr; }
+    .stage { height: 232px; }
+    .stage iframe { transform: translateX(-50%) scale(1.05); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand" id="brand">
+    <img id="brandImg" src="brand-island.png" alt="Hop Island" />
+  </div>
+  <div class="tabs" id="tabs">
+    <button data-tab="island" class="on">Island</button>
+    <button data-tab="clipper" hidden>Clipper</button>
+  </div>
+  <span id="status">Loading…</span>
+  <span class="spacer"></span>
+  <button class="btn" id="undo" disabled title="Ctrl+Z">Undo</button>
+</header>
+
+<!-- ================================================================ ISLAND -->
+<main id="tab-island">
+  <div class="side">
+    <div class="stage"><iframe id="pv" src="index.html?preview=1" title="Live island preview"></iframe></div>
+    <div class="row-inline">
+      <div class="seg" id="pvMode"><button data-v="open" class="on">Open</button><button data-v="closed">Closed</button></div>
+      <span class="hint">The real island, live. Scroll it or pick a page:</span>
+    </div>
+    <div class="chips" id="chips"></div>
+    <nav class="toc" id="toc"></nav>
+  </div>
+  <div class="panel" id="islandPanel">
+    <section id="s-pages">
+      <h2>Pages</h2>
+      <div class="card" id="pages"></div>
+      <p class="hint" style="margin:8px 2px 0">Drag to reorder, or use the arrows. The settings gear sits on whichever page is last.</p>
+    </section>
+    <section id="s-player">
+      <h2>Player page</h2>
+      <div class="card">
+        <div class="item"><div class="label"><b>Left of the song</b><span>What sits before the title</span></div>
+          <div class="seg" data-key="musicLeft"><button data-v="rec">Record button</button><button data-v="art">Album cover</button><button data-v="none">Nothing</button></div></div>
+        <div class="item"><div class="label"><b>Right side</b><span>What sits after the title</span></div>
+          <div class="seg" data-key="musicRight"><button data-v="prayer">Next prayer</button><button data-v="bars">Music bars</button><button data-v="clock">Time</button><button data-v="none">Nothing</button></div></div>
+      </div>
+      <div class="card" style="margin-top:10px" data-switches="player"></div>
+    </section>
+    <section id="s-pill"><h2>Closed pill</h2><div class="card" data-switches="pill"></div></section>
+    <section id="s-popups"><h2>Pop-ups</h2><div class="card" data-switches="popups"></div></section>
+    <section id="s-today"><h2>Today page</h2><div class="card" data-switches="today"></div></section>
+    <section id="s-pc"><h2>PC page</h2><div class="card" data-switches="pc"></div></section>
+    <section id="s-place">
+      <h2>Location</h2>
+      <div class="card">
+        <div class="item"><div class="label"><b>Your city</b><span id="placeNow">Prayer times and weather need a city</span></div></div>
+        <div class="item" id="placeTimesRow" hidden><div class="label"><b>Today's prayer times</b><span id="placeTimes"></span></div></div>
+        <div class="item"><input class="field" id="placeQ" placeholder="Search a city…" autocomplete="off" />
+          <button class="btn" id="placeGo">Search</button></div>
+        <div class="results" id="placeList"></div>
+        <div class="item"><div class="label"><b>Calculation method</b><span>Pick what your local mosque uses</span></div>
+          <select class="field" id="method">
+            <option value="2">ISNA (North America)</option><option value="3">Muslim World League</option>
+            <option value="4">Umm al-Qura (Makkah)</option><option value="5">Egyptian Authority</option>
+            <option value="1">Karachi</option><option value="7">Tehran</option><option value="8">Gulf Region</option>
+            <option value="9">Kuwait</option><option value="10">Qatar</option><option value="11">Singapore</option>
+            <option value="12">France (UOIF)</option><option value="13">Turkey (Diyanet)</option>
+            <option value="15">Moonsighting Committee</option><option value="16">Dubai</option>
+          </select></div>
+        <div class="item"><div class="label"><b>Asr time</b></div>
+          <div class="seg" id="school"><button data-v="0">Standard</button><button data-v="1">Hanafi</button></div></div>
+      </div>
+    </section>
+    <section id="s-prayer"><h2>Prayer</h2><div class="card" data-switches="prayer"></div></section>
+    <section id="s-look"><h2>Look</h2>
+      <div class="card">
+        <div class="item"><div class="label"><b>Settings theme</b><span>System follows Windows' light or dark mode</span></div>
+          <div class="seg" data-key="appTheme"><button data-v="system">System</button><button data-v="light">Light</button><button data-v="dark">Dark</button></div></div>
+      </div>
+      <div class="card" style="margin-top:10px" data-switches="look"></div></section>
+    <section id="s-updates">
+      <h2>Updates</h2>
+      <div class="card">
+        <div class="item"><div class="label"><b>Hop <span id="vNow"></span></b><span id="vState">Checking…</span></div>
+          <button class="btn" id="vCheck">Check now</button><button class="btn primary" id="vGo" hidden>Update now</button></div>
+        <div class="item" id="vNotesRow" hidden><div class="label"><b>What's new</b><span id="vNotes" style="white-space:pre-line"></span></div></div>
+        <div class="item"><div class="label"><b>Check for updates automatically</b><span>When your PC starts and once a day</span></div>
+          <label class="sw"><input type="checkbox" id="vAuto"><i></i></label></div>
+      </div>
+    </section>
+    <section id="s-size">
+      <h2>Size &amp; position</h2>
+      <div class="card">
+        <div class="item"><div class="label"><b>Size</b><span>The whole island, open and closed</span></div>
+          <input type="range" id="scale" min="70" max="150" step="5"><span class="val" id="scaleVal"></span></div>
+        <div class="item"><div class="label"><b>Across the screen</b></div>
+          <div class="seg" id="xPreset"><button data-v="0">Left</button><button data-v="50">Middle</button><button data-v="100">Right</button></div></div>
+        <div class="item"><div class="label"><b>Fine position</b><span>Left ↔ right</span></div>
+          <input type="range" id="posX" min="0" max="100" step="0.5"><span class="val" id="posXVal"></span></div>
+        <div class="item"><div class="label"><b>From the top</b></div>
+          <input type="range" id="posTop" min="0" max="300" step="1"><span class="val" id="posTopVal"></span></div>
+      </div>
+      <p class="hint" style="margin:8px 2px 0">You can also drag the island itself anywhere.</p>
+    </section>
+    <section id="s-reset">
+      <h2>Start over</h2>
+      <div class="card">
+        <div class="item"><div class="label"><b>Reset layout</b><span>Every switch and page back to how it came</span></div>
+          <button class="btn warn" id="resetLayout">Reset layout</button></div>
+        <div class="item"><div class="label"><b>Reset size &amp; position</b><span>100% size, top middle of the screen</span></div>
+          <button class="btn warn" id="resetPos">Reset size &amp; position</button></div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<!-- ================================================================ CLIPPER -->
+<main id="tab-clipper" hidden>
+  <div class="side">
+    <div class="status-card">
+      <div class="top"><img src="hop.png" alt="" /><div><b>Hop Clipper</b><div class="hint"><span class="dot" id="cDot"></span><span id="cState">Checking…</span></div></div></div>
+      <div class="hint">F8 saves the last moments of your screen. Changes here restart its recorder for a moment (never during a full recording).</div>
+      <div class="row-inline">
+        <button class="btn primary" id="cStart" hidden>Start Hop Clipper</button>
+        <button class="btn" id="cFolder">Open clips folder</button>
+      </div>
+    </div>
+  </div>
+  <div class="panel">
+    <section>
+      <h2>What shows up in your clips</h2>
+      <div class="card" data-clip-switches="inclips"></div>
+    </section>
+    <section>
+      <h2>Recording</h2>
+      <div class="card">
+        <div class="item"><div class="label"><b>Frame rate</b><span>120 needs a strong PC and a 120 Hz+ screen; 30 is the lightest</span></div>
+          <div class="seg" data-ckey="fps"><button data-v="30">30 fps</button><button data-v="60">60 fps</button><button data-v="120">120 fps</button></div></div>
+        <div class="item"><div class="label"><b>Quality</b><span>Best is sharpest and biggest, Small saves space</span></div>
+          <div class="seg" data-ckey="quality"><button data-v="best">Best</button><button data-v="high">High</button><button data-v="small">Small</button></div></div>
+        <div class="item"><div class="label"><b>F8 saves</b><span>The clip length you get by default (the pop-up can still change it)</span></div>
+          <div class="seg" data-ckey="defaultSeconds"><button data-v="15">15 s</button><button data-v="30">30 s</button><button data-v="60">1 min</button></div></div>
+      </div>
+    </section>
+    <section>
+      <h2>Where clips go</h2>
+      <div class="card">
+        <div class="item"><div class="label"><b>Save clips to</b><span class="path" id="cDir"></span></div>
+          <button class="btn" id="cDirPick">Change…</button><button class="btn" id="cDirReset">Default</button></div>
+      </div>
+    </section>
+    <section>
+      <h2>Sounds</h2>
+      <div class="card" data-clip-switches="sounds"></div>
+    </section>
+  </div>
+</main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const NAMES = {
+    music: ["Player", "Song, controls, lyric line"],
+    today: ["Today", "Hijri date, weather, prayer times"],
+    clips: ["Clips", "Your newest clips"],
+    pc: ["PC", "CPU, GPU, RAM, disks, ping"],
+  };
+  // every on/off switch of the island, by section: [key, title, detail]
+  const SWITCHES = {
+    player: [["lyricLine", "Lyric line", "The synced lyric under the title"], ["progress", "Progress bar"],
+             ["controls", "Play / skip buttons"], ["volume", "Volume button", "Bottom left"],
+             ["snap", "Snap-to-middle button", "Bottom right"], ["marquee", "Scroll long titles", "Otherwise they fade out at the edge"]],
+    pill: [["pillArt", "Album cover", "Left end"], ["pillClock", "Time", "Middle"], ["pillBars", "Music bars", "Right end"]],
+    popups: [["actCharge", "Charging", "When you plug in"], ["actLow", "Low battery", "At 15% and 5%"],
+             ["actBt", "Bluetooth audio", "When headphones connect"], ["prayCountdown", "Prayer countdown", "The last 15 minutes before a prayer"],
+             ["clipCard", "Clip saved", "The card with Open / Copy after F8"]],
+    today: [["todayHijri", "Hijri date"], ["todayEvents", "Ramadan / Eid countdown"], ["todayWeather", "Weather", "For your city"],
+            ["todayPrayers", "Prayer times", "The strip along the bottom"]],
+    pc: [["gCpu", "CPU"], ["gGpu", "GPU"], ["gRam", "RAM"], ["gDiskC", "System drive", "Free space"], ["gDiskE", "Second drive", "Free space on your biggest other drive"],
+         ["gPing", "Ping", "Click it on the island for a speed test"]],
+    prayer: [["prayerAlarm", "Prayer alarm", "The island opens at each prayer time"], ["prayerChime", "Chime", "The bell sound with the alarm"]],
+    look: [["artColor", "Album colours", "Bars and lyrics take their colour from the cover (off: white)"]],
+  };
+  const CLIP_SWITCHES = {
+    inclips: [["watermark", "“recorded with” watermark", "Top middle of every clip"],
+              ["cursor", "Mouse cursor"], ["islandInClips", "Hop Island", "Off hides the island from clips AND from screenshots (Windows can't hide it from one only)"],
+              ["toastInClips", "F8 pop-up", "The saving… card at the end of a clip"]],
+    sounds: [["sounds", "Click when a clip is saved"]],
+  };
+  const TOC = [["s-pages", "Pages"], ["s-player", "Player page"], ["s-pill", "Closed pill"], ["s-popups", "Pop-ups"],
+               ["s-today", "Today page"], ["s-pc", "PC page"], ["s-place", "Location"], ["s-prayer", "Prayer"], ["s-look", "Look"], ["s-updates", "Updates"],
+               ["s-size", "Size & position"], ["s-reset", "Start over"]];
+
+  let api = null, L = null, pos = null, clip = null;
+  const history = [];                       // earlier states, for Undo
+
+  const ready = new Promise((res) => {
+    const go = () => { api = window.pywebview.api; res(); };
+    if (window.pywebview && window.pywebview.api) go(); else window.addEventListener("pywebviewready", go, { once: true });
+  });
+
+  // ---- the wordmark follows the tab
+  // the wordmark: white letters on dark, "ink" letters on light
+  const isLight = () => {
+    const t = document.documentElement.dataset.theme;
+    return t === "light" || (t === "system" && matchMedia("(prefers-color-scheme: light)").matches);
+  };
+  let brandTab = "island";
+  function brand(tab) {
+    brandTab = tab = tab || brandTab;
+    $("brandImg").src = `brand-${tab}${isLight() ? "-ink" : ""}.png`;
+    $("brandImg").alt = document.title = tab === "clipper" ? "Hop Clipper" : "Hop Island";
+  }
+
+  // ---- tabs
+  $("tabs").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    [...$("tabs").children].forEach((x) => x.classList.toggle("on", x === b));
+    $("tab-island").hidden = b.dataset.tab !== "island";
+    $("tab-clipper").hidden = b.dataset.tab !== "clipper";
+    $("undo").style.visibility = b.dataset.tab === "island" ? "" : "hidden";
+    brand(b.dataset.tab);
+    if (b.dataset.tab === "clipper") refreshClipper();
+  });
+
+  // ---- build the switch rows
+  const sw = (attr, key, title, detail) =>
+    `<div class="item"><div class="label"><b>${esc(title)}</b>${detail ? `<span>${esc(detail)}</span>` : ""}</div>` +
+    `<label class="sw"><input type="checkbox" ${attr}="${key}" checked><i></i></label></div>`;
+  document.querySelectorAll("[data-switches]").forEach((box) => {
+    box.innerHTML = SWITCHES[box.dataset.switches].map(([k, t, d]) => sw("data-key", k, t, d)).join("");
+  });
+  document.querySelectorAll("[data-clip-switches]").forEach((box) => {
+    box.innerHTML = CLIP_SWITCHES[box.dataset.clipSwitches].map(([k, t, d]) => sw("data-ckey", k, t, d)).join("");
+  });
+  $("toc").innerHTML = TOC.map(([id, t]) => `<a href="#${id}">${esc(t)}</a>`).join("");
+  $("toc").addEventListener("click", (e) => {
+    const a = e.target.closest("a"); if (!a) return;
+    e.preventDefault();
+    $(a.getAttribute("href").slice(1)).scrollIntoView({ block: "start" });
+  });
+
+  // ---- the live preview: the real island page in an iframe, spoken to with
+  // messages (local pages can't reach into each other directly)
+  const pv = $("pv");
+  let pvOpen = true, pvUp = false;
+  const send = (fn, ...args) => pv.contentWindow && pv.contentWindow.postMessage({ t: "cmd", fn, args }, "*");
+  window.addEventListener("message", async (e) => {
+    if (e.source !== pv.contentWindow) return;
+    const m = e.data || {};
+    if (m.t === "ready") {
+      pvUp = true;
+      await ready;
+      if (L) { send("Layout", L); send("Hover", pvOpen); renderChips(0); }
+    } else if (m.t === "call") {
+      await ready;
+      let v = null;
+      try { v = await api[m.name](...(m.args || [])); } catch (err) { v = null; }
+      pv.contentWindow.postMessage({ t: "res", id: m.id, v }, "*");
+    }
+  });
+  $("pvMode").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    pvOpen = b.dataset.v === "open";
+    [...$("pvMode").children].forEach((x) => x.classList.toggle("on", x === b));
+    send("Hover", pvOpen);
+  });
+  function showPage(i) {
+    if (!pvOpen) $("pvMode").children[0].click();
+    send("SetPage", i);
+    renderChips(i);
+  }
+  let chipOn = 0;
+  function renderChips(active) {
+    if (active != null) chipOn = active;
+    const ids = L.pages.filter((p) => !L.hidden.includes(p));
+    chipOn = Math.min(chipOn, ids.length - 1);
+    $("chips").innerHTML = ids.map((id, i) => `<button class="chip ${i === chipOn ? "on" : ""}" data-i="${i}">${NAMES[id][0]}</button>`).join("");
+  }
+  $("chips").addEventListener("click", (e) => { const b = e.target.closest(".chip"); if (b) showPage(+b.dataset.i); });
+  // hovering a section about one page shows that page in the preview
+  const SECTION_PAGE = { "s-player": "music", "s-today": "today", "s-pc": "pc" };
+  document.querySelectorAll("#islandPanel section").forEach((sec) => sec.addEventListener("pointerenter", () => {
+    const id = SECTION_PAGE[sec.id]; if (!id || !L) return;
+    const i = L.pages.filter((p) => !L.hidden.includes(p)).indexOf(id);
+    if (i >= 0 && i !== chipOn) showPage(i);
+  }));
+
+  // ---- saving: every change goes straight to the real island
+  let savedTimer = 0;
+  function status(text, ok) {
+    $("status").textContent = text;
+    $("status").classList.toggle("saved", !!ok);
+    clearTimeout(savedTimer);
+    if (ok) savedTimer = setTimeout(() => { $("status").textContent = "All changes saved"; $("status").classList.remove("saved"); }, 1600);
+  }
+  async function commit(next, { remember = true } = {}) {
+    if (remember) { history.push({ L: structuredClone(L) }); $("undo").disabled = false; }
+    status("Saving…");
+    L = await api.set_layout(next);
+    send("Layout", L);
+    render();
+    status("Saved", true);
+  }
+  const change = (patch) => commit({ ...L, ...patch });
+
+  // ---- pages list
+  function renderPages() {
+    $("pages").innerHTML = L.pages.map((id, i) => {
+      const off = L.hidden.includes(id);
+      return `<div class="item pg-row ${off ? "off" : ""}" draggable="true" data-id="${id}">
+        <span class="grip" aria-hidden="true">⋮⋮</span>
+        <div class="label"><b>${NAMES[id][0]}</b><span>${NAMES[id][1]}</span></div>
+        <button class="mv" data-mv="-1" data-id="${id}" ${i === 0 ? "disabled" : ""} aria-label="Move up">▲</button>
+        <button class="mv" data-mv="1" data-id="${id}" ${i === L.pages.length - 1 ? "disabled" : ""} aria-label="Move down">▼</button>
+        <label class="sw" title="${off ? "Show this page" : "Hide this page"}"><input type="checkbox" data-page="${id}" ${off ? "" : "checked"}><i></i></label>
+      </div>`;
+    }).join("");
+  }
+  function move(id, to) {
+    const pages = L.pages.filter((p) => p !== id);
+    pages.splice(Math.max(0, Math.min(pages.length, to)), 0, id);
+    change({ pages });
+  }
+  $("pages").addEventListener("click", (e) => {
+    const b = e.target.closest(".mv"); if (!b) return;
+    move(b.dataset.id, L.pages.indexOf(b.dataset.id) + +b.dataset.mv);
+  });
+  $("pages").addEventListener("change", (e) => {
+    const id = e.target.dataset.page; if (!id) return;
+    const hidden = e.target.checked ? L.hidden.filter((p) => p !== id) : [...L.hidden, id];
+    if (hidden.length >= L.pages.length) { e.target.checked = true; status("At least one page has to stay"); return; }
+    change({ hidden });
+  });
+  let dragId = null;
+  $("pages").addEventListener("dragstart", (e) => { const r = e.target.closest(".pg-row"); if (!r) return; dragId = r.dataset.id; r.classList.add("dragging"); });
+  $("pages").addEventListener("dragend", () => { dragId = null; document.querySelectorAll(".pg-row").forEach((r) => r.classList.remove("dragging", "over")); });
+  $("pages").addEventListener("dragover", (e) => {
+    const r = e.target.closest(".pg-row"); if (!r || !dragId) return;
+    e.preventDefault();
+    document.querySelectorAll(".pg-row").forEach((x) => x.classList.toggle("over", x === r));
+  });
+  $("pages").addEventListener("drop", (e) => {
+    const r = e.target.closest(".pg-row"); if (!r || !dragId) return;
+    e.preventDefault();
+    if (r.dataset.id !== dragId) move(dragId, L.pages.filter((p) => p !== dragId).indexOf(r.dataset.id));
+  });
+
+  // ---- island segmented choices and switches
+  document.querySelectorAll(".seg[data-key]").forEach((seg) => seg.addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b || L[seg.dataset.key] === b.dataset.v) return;
+    change({ [seg.dataset.key]: b.dataset.v });
+  }));
+  $("tab-island").addEventListener("change", (e) => {
+    const k = e.target.dataset && e.target.dataset.key;
+    if (k && e.target.type === "checkbox") change({ [k]: e.target.checked });
+  });
+
+  // ---- size
+  $("scale").addEventListener("input", () => { $("scaleVal").textContent = $("scale").value + "%"; });
+  $("scale").addEventListener("change", () => change({ scale: +$("scale").value / 100 }));
+
+  // ---- position
+  let posTimer = 0;
+  async function setPos(x, top) {
+    pos = await api.set_position(x, top);
+    renderPos();
+    status("Saved", true);
+  }
+  function queuePos() {
+    $("posXVal").textContent = Math.round(+$("posX").value) + "%";
+    $("posTopVal").textContent = $("posTop").value + " px";
+    clearTimeout(posTimer);
+    posTimer = setTimeout(() => setPos(+$("posX").value, +$("posTop").value), 60);
+  }
+  $("posX").addEventListener("input", queuePos);
+  $("posTop").addEventListener("input", queuePos);
+  $("xPreset").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) setPos(+b.dataset.v, null); });
+  function renderPos() {
+    if (!pos) return;
+    $("posX").value = pos.x; $("posXVal").textContent = Math.round(pos.x) + "%";
+    $("posTop").value = pos.top; $("posTopVal").textContent = pos.top + " px";
+    [...$("xPreset").children].forEach((b) => b.classList.toggle("on", Math.abs(+b.dataset.v - pos.x) < 1));
+  }
+
+  // ---- reset: press once to arm, again to do it (no pop-up dialogs)
+  function armed(btn, label, action) {
+    let armedAt = 0;
+    btn.addEventListener("click", async () => {
+      if (Date.now() - armedAt > 3000) {
+        armedAt = Date.now(); btn.textContent = "Click again to confirm";
+        setTimeout(() => { if (Date.now() - armedAt >= 3000) btn.textContent = label; }, 3100);
+        return;
+      }
+      armedAt = 0; btn.textContent = label;
+      await action();
+    });
+  }
+  armed($("resetLayout"), "Reset layout", async () => {
+    history.push({ L: structuredClone(L) }); $("undo").disabled = false;
+    L = await api.reset_layout();
+    send("Layout", L);
+    render(); status("Layout reset", true);
+  });
+  armed($("resetPos"), "Reset size & position", async () => {
+    history.push({ L: structuredClone(L), pos: structuredClone(pos) }); $("undo").disabled = false;
+    const r = await api.reset_position();
+    L = r.layout; pos = r.position;
+    send("Layout", L);
+    render(); renderPos(); status("Size & position reset", true);
+  });
+
+  // ---- undo (island)
+  async function undo() {
+    const last = history.pop(); if (!last) return;
+    $("undo").disabled = !history.length;
+    await commit(last.L, { remember: false });
+    if (last.pos) setPos(last.pos.x, last.pos.top);
+    status("Undone", true);
+  }
+  $("undo").addEventListener("click", undo);
+  document.addEventListener("keydown", (e) => {
+    if (e.ctrlKey && e.key.toLowerCase() === "z" && !$("tab-island").hidden) { e.preventDefault(); undo(); }
+  });
+
+  function render() {
+    document.documentElement.dataset.theme = L.appTheme || "system";
+    brand();
+    renderPages();
+    document.querySelectorAll(".seg[data-key]").forEach((seg) =>
+      [...seg.children].forEach((b) => b.classList.toggle("on", b.dataset.v === L[seg.dataset.key])));
+    document.querySelectorAll("#tab-island input[type=checkbox][data-key]").forEach((c) => { c.checked = L[c.dataset.key] !== false; });
+    $("scale").value = Math.round(L.scale * 100); $("scaleVal").textContent = Math.round(L.scale * 100) + "%";
+    renderChips();
+  }
+
+  // ================================================================ CLIPPER
+  function renderClipper() {
+    if (!clip) return;
+    $("cDot").classList.toggle("on", clip.running);
+    $("cState").textContent = clip.running ? "Running" : "Not running";
+    $("cStart").hidden = clip.running;
+    const s = clip.settings;
+    document.querySelectorAll("#tab-clipper input[data-ckey]").forEach((c) => { c.checked = !!s[c.dataset.ckey]; });
+    document.querySelectorAll(".seg[data-ckey]").forEach((seg) =>
+      [...seg.children].forEach((b) => b.classList.toggle("on", String(s[seg.dataset.ckey]) === b.dataset.v)));
+    $("cDir").textContent = clip.folder || "";
+  }
+  async function refreshClipper() {
+    clip = await api.get_clipper();
+    $("tabs").querySelector('[data-tab="clipper"]').hidden = !clip.installed;
+    renderClipper();
+  }
+  async function setClip(patch) {
+    status("Saving…");
+    clip = await api.set_clipper(patch);
+    renderClipper();
+    status(clip.running ? "Saved · recorder restarting" : "Saved", true);
+  }
+  $("tab-clipper").addEventListener("change", (e) => {
+    const k = e.target.dataset && e.target.dataset.ckey;
+    if (k && e.target.type === "checkbox") setClip({ [k]: e.target.checked });
+  });
+  document.querySelectorAll(".seg[data-ckey]").forEach((seg) => seg.addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    const k = seg.dataset.ckey, v = k === "quality" ? b.dataset.v : +b.dataset.v;
+    if (clip && clip.settings[k] === v) return;
+    setClip({ [k]: v });
+  }));
+  $("cStart").addEventListener("click", async () => {
+    $("cState").textContent = "Starting…";
+    await api.start_clipper();
+    setTimeout(refreshClipper, 2500);
+  });
+  $("cFolder").addEventListener("click", () => api.open_clips_folder());
+  $("cDirPick").addEventListener("click", async () => {
+    const dir = await api.pick_folder();
+    if (dir) setClip({ saveDir: dir });
+  });
+  $("cDirReset").addEventListener("click", () => setClip({ saveDir: "" }));
+
+  // ---- updates
+  function renderUpdate(u) {
+    $("vNow").textContent = "v" + u.current;
+    $("vState").textContent = u.available ? `v${u.latest} is ready` : u.latest ? "You have the latest version" :
+      (u.checked ? "Couldn't reach GitHub (offline?)" : "Not checked yet");
+    $("vGo").hidden = !u.available;
+    $("vNotesRow").hidden = !(u.available && u.notes);
+    $("vNotes").textContent = u.notes || "";
+    $("vAuto").checked = !!u.auto;
+  }
+  $("vCheck").addEventListener("click", async () => { $("vState").textContent = "Checking…"; renderUpdate(await api.check_update()); });
+  $("vGo").addEventListener("click", () => api.open_release());
+  $("vAuto").addEventListener("change", async () => renderUpdate(await api.set_auto_update($("vAuto").checked)));
+
+  // ---- location (prayer times + weather)
+  const fmtTime = (hm) => {
+    const [h, m] = hm.split(":").map(Number);
+    return new Date(2000, 0, 1, h, m).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  };
+  function renderPlace(p) {
+    $("placeNow").textContent = p.location ? (p.location.label || p.location.name) : "Prayer times and weather need a city";
+    $("method").value = String(p.method);
+    [...$("school").children].forEach((b) => b.classList.toggle("on", b.dataset.v === String(p.school)));
+  }
+  // The new city's times: in this card, and pushed into the live preview
+  // (it isn't sent the host's updates, so the settings app hands them over).
+  async function refreshPlace(p) {
+    renderPlace(p);
+    const pr = await api.get_prayers();
+    const day = pr && pr.today;
+    $("placeTimesRow").hidden = !day;
+    if (day) $("placeTimes").textContent = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"].map((n) => `${n} ${fmtTime(day[n])}`).join(" · ");
+    send("PrayerReset");
+    send("Prayers", pr);
+    send("Today", await api.get_today());
+  }
+  async function searchPlace() {
+    const q = $("placeQ").value.trim();
+    if (q.length < 2) return;
+    $("placeList").innerHTML = '<button disabled>Searching…</button>';
+    const got = await api.search_city(q);
+    if (got === null) { $("placeList").innerHTML = "<button disabled>Could not search (offline?)</button>"; return; }
+    $("placeList").innerHTML = got.length
+      ? got.map((c, i) => `<button data-i="${i}">${esc(c.label)}</button>`).join("")
+      : "<button disabled>No city found</button>";
+    $("placeList").onclick = async (e) => {
+      const b = e.target.closest("button[data-i]"); if (!b) return;
+      status("Saving…");
+      await refreshPlace(await api.set_location(got[+b.dataset.i]));
+      $("placeList").innerHTML = ""; $("placeQ").value = "";
+      status("Saved · prayer times updating", true);
+    };
+  }
+  $("placeGo").addEventListener("click", searchPlace);
+  $("placeQ").addEventListener("keydown", (e) => { if (e.key === "Enter") searchPlace(); });
+  $("method").addEventListener("change", async () => { status("Saving…"); await refreshPlace(await api.set_location(null, +$("method").value)); status("Saved", true); });
+  $("school").addEventListener("click", async (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    status("Saving…"); await refreshPlace(await api.set_location(null, null, +b.dataset.v)); status("Saved", true);
+  });
+
+  matchMedia("(prefers-color-scheme: light)").addEventListener("change", () => brand());
+  ready.then(async () => {
+    L = await api.get_layout();
+    pos = await api.get_position();
+    render(); renderPos();
+    status("All changes saved");
+    if (pvUp) { send("Layout", L); send("Hover", pvOpen); }
+    brand("island");
+    await refreshPlace(await api.get_location());
+    api.check_update().then(renderUpdate);
+    refreshClipper();
+    setInterval(() => { if (!$("tab-clipper").hidden) refreshClipper(); }, 5000);
+  });
+})();
+</script>
+<script src="./tip.js"></script>
+</body>
+</html>
