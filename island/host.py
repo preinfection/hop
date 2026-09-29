@@ -1645,6 +1645,7 @@ def main():
 
         def key():
             glass()
+            wv = island.window.native.browser.webview          # used by the folder mapping below
             # The clip-saved card plays the clip: the page may not read E:            # directly, so the clips folder is mapped to a private host name
             # (WebView2 virtual host; nothing is copied).
             # (CoreWebView2 exists only once the engine has started: retried.)
