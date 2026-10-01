@@ -420,7 +420,9 @@
   // ---- expanded cards: clip saved, drop to upload
   const card = $("card");
   let cardTimer = 0, cardOn = false, cardOff = 0;
+  let cardSeq = 0;                                   // bumped by every new card (a swipe-away checks it)
   function showCard(html, w, h, ms, after) {
+    cardSeq++;
     clearTimeout(cardTimer); clearTimeout(cardOff);
     if (isOpen) window.__islandHover(false);
     const draw = () => {
@@ -840,7 +842,7 @@
     if (!sw.live) { sw = null; return; }                    // it was a click
     const fresh = performance.now() - sw.lastT < 90;           // still moving when let go
     const go = sw.dy < -26 || (fresh && sw.v < -0.2 && sw.dy < -8);    // far enough, or a flick
-    const target = sw.target, el = sw.el, dy = sw.dy;
+    const target = sw.target, el = sw.el, dy = sw.dy, seq = cardSeq;
     if (sw.frame) cancelAnimationFrame(sw.frame);
     sw = null;
     island.classList.remove("swiping");
@@ -866,7 +868,8 @@
     island.style.transform = `translate3d(0, ${Math.min(0, dy * 0.32 * 0.4).toFixed(1)}px, 0) scale(${sx.toFixed(3)}, ${sy.toFixed(3)})`;
     setTimeout(() => {
       island.style.transition = "none";                        // the size change below is instant
-      if (target === "alert") stopAlert(); else hideCard();
+      // a NEW card that arrived during the shrink stays: only the swiped one goes
+      if (target === "alert") stopAlert(); else if (cardSeq === seq) hideCard();
       island.style.transform = "";
       if (el) { el.style.transition = ""; el.style.opacity = ""; }
       void island.offsetWidth;
