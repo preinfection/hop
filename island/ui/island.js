@@ -208,6 +208,10 @@
     ["right-prayer", "right-bars", "right-clock", "right-none"].forEach((c) => island.classList.remove(c));
     island.classList.add("left-" + (L.musicLeft || "rec"), "right-" + (L.musicRight || "prayer"));
     for (const [k, cls] of Object.entries(FLAGS)) island.classList.toggle(cls, L[k] === false);
+    // the style: a notch flush with the top edge, or the floating pill
+    const wasNotch = document.documentElement.classList.contains("notch");
+    document.documentElement.classList.toggle("notch", L.style === "notch");
+    if (wasNotch !== (L.style === "notch") && typeof settlePill === "function") settlePill();
     // the island's size: the host resizes the window by the same factor
     if (!window.__islandPreview) document.documentElement.style.zoom = String(L.scale || 1);
     marquees.forEach((m) => m.run(isOpen && !off("marquee")));
@@ -373,9 +377,11 @@
 
   // ---- the closed pill's width: a live activity > the prayer countdown > normal.
   // The host's click-through region grows first and shrinks after the animation.
-  const PILL_W = 126, PRAY_W = 176;
+  // closed widths (host.py COMPACT / NOTCH / COMPACT_WIDE): the notch is one width
+  const notchOn = () => document.documentElement.classList.contains("notch");
+  const PILL_W_NOW = () => (notchOn() ? 200 : 126), PRAY_W_NOW = () => (notchOn() ? 200 : 176);
   let actW = 0, pillShrink = 0;
-  const wantedPill = () => actW || (island.classList.contains("pray-show") || shown ? PRAY_W : PILL_W);
+  const wantedPill = () => actW || (island.classList.contains("pray-show") || shown ? PRAY_W_NOW() : PILL_W_NOW());
   function growPill(w) { clearTimeout(pillShrink); return Promise.resolve(api.setPillWidth(Math.max(w, wantedPill()))); }
   function settlePill() { clearTimeout(pillShrink); pillShrink = setTimeout(() => api.setPillWidth(wantedPill()), 460); }
 
@@ -718,7 +724,7 @@
     shown = on;
     clearTimeout(narrowTimer);
     if (on) {
-      growPill(PRAY_W).then(() => { if (shown) island.classList.add("pray-show"); });
+      growPill(PRAY_W_NOW()).then(() => { if (shown) island.classList.add("pray-show"); });
     } else {
       clearTimeout(flashTimer);
       island.classList.remove("pray-show");
@@ -834,17 +840,39 @@
     if (!sw.live) { sw = null; return; }                    // it was a click
     const fresh = performance.now() - sw.lastT < 90;           // still moving when let go
     const go = sw.dy < -26 || (fresh && sw.v < -0.2 && sw.dy < -8);    // far enough, or a flick
-    const target = sw.target, el = sw.el;
+    const target = sw.target, el = sw.el, dy = sw.dy;
     if (sw.frame) cancelAnimationFrame(sw.frame);
     sw = null;
     island.classList.remove("swiping");
-    island.style.transform = "";
-    if (el) el.style.opacity = "";
-    if (!go) return;                                          // not far enough: springs back
-    island.classList.add("swipe-away");
-    setTimeout(() => island.classList.remove("swipe-away"), 560);
+    if (!go) {                                                // not far enough: springs back
+      island.style.transform = "";
+      if (el) el.style.opacity = "";
+      return;
+    }
     api.swiped();
-    if (target === "alert") stopAlert(); else hideCard();
+    // SMOOTH AWAY: the card shrinks to the pill with a GPU scale only (no
+    // width/height/radius animation, no blur), its video stops at once, and
+    // the real size snaps to the pill in one step when the scale is done.
+    const v = el && el.querySelector("video");
+    if (v) { try { v.pause(); v.removeAttribute("src"); v.load(); } catch {} }
+    const r = island.getBoundingClientRect();
+    const root = getComputedStyle(document.documentElement);
+    const pw = parseFloat(root.getPropertyValue("--w")) || 126, ph = parseFloat(root.getPropertyValue("--h")) || 37;
+    const sx = Math.min(1, pw / Math.max(1, r.width)), sy = Math.min(1, ph / Math.max(1, r.height));
+    island.classList.add("swipe-away");
+    if (el) { el.style.transition = "opacity 140ms ease"; el.style.opacity = "0"; }
+    island.style.transition = "transform 230ms cubic-bezier(.2, .8, .2, 1)";
+    void island.offsetWidth;                                  // start from where the finger left it
+    island.style.transform = `translate3d(0, ${Math.min(0, dy * 0.32 * 0.4).toFixed(1)}px, 0) scale(${sx.toFixed(3)}, ${sy.toFixed(3)})`;
+    setTimeout(() => {
+      island.style.transition = "none";                        // the size change below is instant
+      if (target === "alert") stopAlert(); else hideCard();
+      island.style.transform = "";
+      if (el) { el.style.transition = ""; el.style.opacity = ""; }
+      void island.offsetWidth;
+      island.style.transition = "";
+      island.classList.remove("swipe-away");
+    }, 230);
   }
   island.addEventListener("pointerup", endSwipe);
   island.addEventListener("pointercancel", endSwipe);

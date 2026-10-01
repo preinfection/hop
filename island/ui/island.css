@@ -884,6 +884,16 @@ button svg { width: 24px; height: 24px; fill: currentColor; }
   transition: width 420ms var(--spring), height 420ms var(--spring), border-radius 420ms var(--spring) !important; }
 .island.swiping .card, .island.swiping .alert { will-change: opacity; transition: none !important; }
 .island.swipe-away .card, .island.swipe-away .alert {
-  opacity: 0 !important; filter: blur(6px); transform: translateY(-12px) scale(0.9) !important;
-  transition: opacity 170ms ease, filter 170ms ease, transform 220ms ease !important;
+  opacity: 0 !important; transition: opacity 140ms ease !important;   /* no blur: it was the costly part */
 }
+
+/* ---- STYLE: NOTCH (layout.style = "notch", host.py NOTCH): flush with the top
+   edge, square top, rounded bottom. Sizes measured from the Windows notch apps
+   (NotchIsland / Notchify): 200 x 32 closed with 10px corners, 24px open. */
+:root.notch { --w: 200px; --w-wide: 200px; --h: 32px; }
+.notch .island { border-radius: 0 0 10px 10px; }
+.notch .island.open,
+.notch .island.open.vol,
+.notch .island.carding,
+.notch .island.carding.open { border-radius: 0 0 24px 24px; }
+.notch .mini-art { width: 20px; height: 20px; border-radius: 5px; transform: translateY(-1px); }

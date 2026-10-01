@@ -84,6 +84,8 @@ def latest_release():
 CONFIG = os.path.join(os.environ["APPDATA"], "LyricsIslandLite", "config.json")
 
 COMPACT = (126, 37)                       # CSS px: the iPhone Dynamic Island
+NOTCH = (200, 32)                         # CSS px: the "notch" style, flush with the top edge (measured from
+                                          # the Windows notch apps: NotchIsland / Notchify)
 COMPACT_WIDE = 176                        # while it flashes a prayer countdown (island.css --w-wide)
 EXPANDED = (360, 150)                     # open on hover (island/island.css)
 VOL_EXTRA = 42                            # the volume row the island grows by (island.css --vol-h)
@@ -125,6 +127,7 @@ LAYOUT_DEFAULTS = {
     # look
     "marquee": True, "artColor": True,
     "appTheme": "system",      # the settings app: system | light | dark
+    "style": "pill",           # pill (floats 10px below the top) | notch (flush with the top edge)
     "scale": 1.0,              # size of the whole island, 0.7 - 1.5
 }
 BOOL_KEYS = [k for k, v in LAYOUT_DEFAULTS.items() if isinstance(v, bool)]
@@ -142,7 +145,7 @@ def clean_layout(raw, legacy_pages34=True):
     if len(L["hidden"]) >= len(PAGE_IDS):                  # at least one page stays
         L["hidden"] = [p for p in L["hidden"] if p != "music"]
     for k, allowed in (("musicLeft", ("rec", "art", "none")), ("musicRight", ("prayer", "bars", "clock", "none")),
-                       ("appTheme", ("system", "light", "dark"))):
+                       ("appTheme", ("system", "light", "dark")), ("style", ("pill", "notch"))):
         if raw.get(k) in allowed:
             L[k] = raw[k]
     for k in BOOL_KEYS:
@@ -381,7 +384,15 @@ class Island:
         if pos and isinstance(pos, dict) and "cx" in pos:
             self.set_bounds(pos["cx"] - w / 2, pos["y"], w, h)
         else:
-            self.set_bounds(l + (r - l - w) / 2, t + 10 * s, w, h)
+            self.set_bounds(l + (r - l - w) / 2, t + self.top_gap() * s, w, h)
+
+    def compact(self):
+        """The closed island's size in CSS px for the current style."""
+        return NOTCH if getattr(self, "layout", {}).get("style") == "notch" else COMPACT
+
+    def top_gap(self):
+        """CSS px between the top of the screen and the island: the notch sits on the edge."""
+        return 0 if getattr(self, "layout", {}).get("style") == "notch" else 10
 
     # ---- the API the bridge calls (window.pywebview.api.*)
     def get_state(self):
@@ -562,7 +573,7 @@ class Island:
         """The closed pill grows for a live activity (prayer countdown,
         charging, Bluetooth): widen its region first (the page narrows it again
         only after the shrink animation)."""
-        self.pill_w = max(COMPACT[0], min(EXPANDED[0], int(px or COMPACT[0])))
+        self.pill_w = max(self.compact()[0], min(EXPANDED[0], int(px or self.compact()[0])))
         if not self.expanded:
             ui_thread(self.window, lambda: self.set_region(False))
         return True
@@ -698,7 +709,7 @@ class Island:
     def set_pill_wide(self, on):
         """The closed pill grows for the prayer countdown: widen its region
         (the page narrows it again only after the shrink animation)."""
-        return self.set_pill_width(COMPACT_WIDE if on else COMPACT[0])
+        return self.set_pill_width(max(COMPACT_WIDE, self.compact()[0]) if on else self.compact()[0])
 
     def hold_open(self, on):
         """The prayer alarm: open the island now and keep it open until released."""
@@ -816,6 +827,7 @@ class Island:
     def set_layout(self, raw):
         new = clean_layout(raw)
         old_scale = self.layout.get("scale", 1.0)
+        old_style = self.layout.get("style", "pill")
         self.layout = new
         self.cfg["layout"] = new
         write_config(self.cfg)
@@ -824,11 +836,25 @@ class Island:
         if self.window:
             if new["scale"] != old_scale:
                 ui_thread(self.window, self._apply_scale)
+            if new["style"] != old_style:
+                ui_thread(self.window, self._apply_style)
             self.window.run_js(f"window.__islandLayout && window.__islandLayout({json.dumps(new)})")
         return dict(new)
 
     def reset_layout(self):
         return self.set_layout(dict(LAYOUT_DEFAULTS, scale=self.layout.get("scale", 1.0)))
+
+    def _apply_style(self):
+        """Pill <-> notch: the closed box changes size and the island moves to
+        the style's height (flush with the top for the notch), same x."""
+        self.pill_w = self.compact()[0]
+        x, _, w, h = self.rect()
+        _, t, _, _ = self.work_area()
+        y = t + self.top_gap() * self.scale()
+        self.set_bounds(x, y, w, h)
+        self.cfg["windowPosition"] = {"cx": x + w / 2, "y": y}
+        write_config(self.cfg)
+        self.set_region(self.expanded)
 
     def _apply_scale(self):
         """New island size: the window grows or shrinks around its top middle."""
@@ -1064,7 +1090,7 @@ class Island:
         s = self.scale()
         l, t, r, b = self.work_area()
         _, _, w, h = self.rect()
-        self.set_bounds(l + (r - l - w) / 2, t + 10 * s, w, h)
+        self.set_bounds(l + (r - l - w) / 2, t + self.top_gap() * s, w, h)
         self.cfg["windowPosition"] = None
         write_config(self.cfg)
         return True
@@ -1079,7 +1105,7 @@ class Island:
             l, t, r, b = 0, 0, w, h
         else:
             s = self.scale()
-            cw, ch = round(getattr(self, "pill_w", COMPACT[0]) * s), round(COMPACT[1] * s)
+            cw, ch = round(getattr(self, "pill_w", self.compact()[0]) * s), round(self.compact()[1] * s)
             l, t, r, b = (w - cw) // 2, 0, (w - cw) // 2 + cw, ch
         gdi = ctypes.windll.gdi32
         gdi.CreateRectRgn.restype = wt.HANDLE
@@ -1166,7 +1192,7 @@ class Island:
                 u32.GetCursorPos(ctypes.byref(pt))
                 x, y, w, _ = self.rect()
                 s = self.scale()
-                pw, ph = (EXPANDED if is_open else (getattr(self, "pill_w", COMPACT[0]), COMPACT[1]))
+                pw, ph = (EXPANDED if is_open else (getattr(self, "pill_w", self.compact()[0]), self.compact()[1]))
                 if is_open:
                     ph += self.extra
                 pw, ph = pw * s, ph * s
