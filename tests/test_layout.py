@@ -63,9 +63,18 @@ def test_theme(v):
     assert host.clean_layout({"appTheme": v})["appTheme"] == v
 
 
+@pytest.mark.parametrize("v", ["pill", "notch"])
+def test_style(v):
+    assert host.clean_layout({"style": v})["style"] == v
+
+
+def test_style_defaults_to_pill():
+    assert host.clean_layout({})["style"] == "pill" and host.LAYOUT_DEFAULTS["style"] == "pill"
+
+
 @pytest.mark.parametrize("key,bad", [("musicLeft", "cover"), ("musicLeft", None), ("musicLeft", 3),
                                      ("musicRight", "weather"), ("musicRight", ""), ("appTheme", "blue"),
-                                     ("appTheme", True)])
+                                     ("appTheme", True), ("style", "Notch"), ("style", "round"), ("style", None)])
 def test_bad_choice_falls_back(key, bad):
     assert host.clean_layout({key: bad})[key] == host.LAYOUT_DEFAULTS[key]
 

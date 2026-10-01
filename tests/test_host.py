@@ -219,3 +219,61 @@ def test_clipper_settings_damaged(raw):
     os.makedirs(os.path.dirname(host.CLIPPER_SETTINGS), exist_ok=True)
     open(host.CLIPPER_SETTINGS, "w").write(raw)
     assert host.clipper_settings() == host.CLIPPER_DEFAULTS
+
+
+# ================================================================ style: pill / notch
+def _hidden_window(isl):
+    """A real (hidden) popup window for the island, like the UI tests use."""
+    import ctypes
+    u32 = ctypes.windll.user32
+    u32.CreateWindowExW.restype = ctypes.c_void_p
+    isl.hwnd = u32.CreateWindowExW(0x80, "STATIC", "hop-test-style", 0x80000000, 300, 300, 360, 196,
+                                   None, None, None, None)
+    return lambda: u32.DestroyWindow(ctypes.c_void_p(isl.hwnd))
+
+
+@pytest.mark.parametrize("style,size,gap", [("pill", host.COMPACT, 10), ("notch", host.NOTCH, 0)])
+def test_style_size_and_gap(island, style, size, gap):
+    island.set_layout({"style": style})
+    assert island.compact() == size and island.top_gap() == gap
+
+
+@pytest.mark.parametrize("style,gap", [("pill", 10), ("notch", 0)])
+def test_recenter_uses_the_style_gap(island, style, gap):
+    """Snap to top middle: the notch lands ON the top edge, the pill 10px below."""
+    island.set_layout({"style": style})
+    close = _hidden_window(island)
+    try:
+        island.recenter()
+        l, t, r, _ = island.work_area()
+        x, y, w, _ = island.rect()
+        assert abs(y - (t + gap * island.scale())) <= 1
+        assert abs((x + w / 2) - (l + r) / 2) <= 1
+    finally:
+        close()
+
+
+def test_switching_to_notch_moves_it_to_the_edge_and_resizes_the_pill(island):
+    close = _hidden_window(island)
+    try:
+        island.recenter()                                   # a pill, 10px down
+        island.set_layout({"style": "notch"})
+        island._apply_style()
+        _, t, _, _ = island.work_area()
+        _, y, _, _ = island.rect()
+        assert abs(y - t) <= 1
+        assert island.pill_w == host.NOTCH[0]
+        assert host.read_config()["windowPosition"]["y"] == y
+        island.set_layout({"style": "pill"})
+        island._apply_style()
+        _, y, _, _ = island.rect()
+        assert abs(y - (t + 10 * island.scale())) <= 1 and island.pill_w == host.COMPACT[0]
+    finally:
+        close()
+
+
+@pytest.mark.parametrize("style,minimum", [("pill", host.COMPACT[0]), ("notch", host.NOTCH[0])])
+def test_pill_width_never_below_the_style(island, style, minimum):
+    island.set_layout({"style": style})
+    island.set_pill_width(50)
+    assert island.pill_w == minimum
