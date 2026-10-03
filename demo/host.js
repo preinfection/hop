@@ -306,7 +306,8 @@
     mic: () => { H.mic = !H.mic; ev("privacy", { mic: H.mic ? ["Discord"] : [], cam: [] }); },
     cam: () => { H.cam = !H.cam; ev("privacy", { mic: [], cam: H.cam ? ["Camera"] : [] }); },
     clip: () => js("__islandClip", { name: "Roblox 2026-10-03 17-02-11 (30s).mp4", path: "C:\\demo\\clip.mp4", url: "/demo/media/sample.mp4", seconds: 30, kind: "clip", game: "Roblox" }),
-    goal: () => { const m = (s) => ({ id: "m1", league: "Premier League", home: "Arsenal", away: "Chelsea", hs: s, as: 1, status: "67'", live: true, state: "in" });
+    goal: () => { const m = (s) => ({ id: "m1", league: "Premier League", home: "Arsenal", away: "Chelsea", hs: s, as: 1, status: "67'", live: true, state: "in",
+                                      homeLogo: "https://a.espncdn.com/i/teamlogos/soccer/500/359.png", awayLogo: "https://a.espncdn.com/i/teamlogos/soccer/500/363.png" });
                   ev("sports", [m(1)]); setTimeout(() => ev("sports", [m(2)]), 400); },
     bt: () => js("__islandActivity", { kind: "bt", name: "Galaxy Buds2 Pro", pct: 78 }),
     charge: () => js("__islandActivity", { kind: "charge", pct: 64 }),

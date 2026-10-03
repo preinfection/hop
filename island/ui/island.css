@@ -394,7 +394,7 @@ button.gring:hover::before { background: #111; }
   height: var(--card-h, 100px);
   margin-left: calc(var(--card-w, 312px) / -2);
   box-sizing: border-box;
-  padding: 14px 20px 14px 14px;
+  padding: 14px 16px;
   display: flex;
   align-items: center;
   gap: 14px;

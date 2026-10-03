@@ -304,7 +304,8 @@ def test_scores_pick_your_teams(monkeypatch):
         {"id": "2", "competitions": [{"competitors": [team("Everton", "0", "home"), team("Fulham", "0", "away")],
                                       "status": {"type": {"state": "pre", "shortDetail": "3:00 PM"}}}]}]})
     ms = features.scores([{"league": "epl", "team": "arsenal"}])
-    assert ms == [{"id": "1", "league": "EPL", "home": "Arsenal", "away": "Chelsea", "hs": "2", "as": "1", "state": "in", "live": True, "status": "67'"}]
+    assert ms == [{"id": "1", "league": "EPL", "home": "Arsenal", "away": "Chelsea", "homeLogo": "", "awayLogo": "", "sport": "soccer",
+                   "hs": "2", "as": "1", "state": "in", "live": True, "status": "67'"}]
 
 
 @pytest.mark.parametrize("mm,expected", [([0, 0, 0.4, 1], {"mins": 30, "mm": 1.4}), ([0.5, 1, 1, 1], None), ([0, 0, 0, 0], None)])

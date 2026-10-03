@@ -14,6 +14,7 @@ import datetime as dt
 import os
 import re
 import sqlite3
+import urllib.parse
 import winreg
 import xml.etree.ElementTree as ET
 from ctypes import wintypes as wt
@@ -46,6 +47,56 @@ def app_display_name(aumid):
             return KNOWN_NAMES[p.lower()]
     word = parts[-1] if parts else tail
     return word[:1].upper() + word[1:] if word else "Notification"
+
+
+def toast_image(payload):
+    """The picture a toast shows beside its text (Discord and other Electron
+    apps put the SENDER's avatar there, placement="appLogoOverride"): a local
+    path or an https link, or ''."""
+    if isinstance(payload, (bytes, bytearray)):
+        payload = payload.decode("utf-8", "replace")
+    try:
+        root = ET.fromstring(payload)
+    except ET.ParseError:
+        return ""
+    imgs = list(root.iter("image"))
+    imgs.sort(key=lambda i: i.get("placement") != "appLogoOverride")       # the sender's picture first
+    for img in imgs:
+        src = (img.get("src") or "").strip()
+        if src.lower().startswith("https://"):
+            return src
+        if src.lower().startswith("file:///"):
+            src = urllib.parse.unquote(src[8:]).replace("/", "\\")
+        if re.match(r"^[a-zA-Z]:\\", src) and os.path.isfile(src):
+            return src
+    return ""
+
+
+def image_data_url(src, size=96):
+    """A local file or https picture as a small round-cropped PNG data: URL."""
+    import base64
+    import io
+    try:
+        from PIL import Image, ImageDraw
+        if src.lower().startswith("https://"):
+            import urllib.request
+            with urllib.request.urlopen(urllib.request.Request(src, headers={"User-Agent": "Hop Island"}), timeout=5) as r:
+                data = r.read(2_000_000)
+        else:
+            with open(src, "rb") as fh:
+                data = fh.read(2_000_000)
+        im = Image.open(io.BytesIO(data)).convert("RGBA")
+        w, h = im.size
+        side = min(w, h)
+        im = im.crop(((w - side) // 2, (h - side) // 2, (w + side) // 2, (h + side) // 2)).resize((size, size), Image.LANCZOS)
+        mask = Image.new("L", (size * 4, size * 4), 0)
+        ImageDraw.Draw(mask).ellipse((0, 0, size * 4 - 1, size * 4 - 1), fill=255)
+        im.putalpha(mask.resize((size, size), Image.LANCZOS))
+        buf = io.BytesIO()
+        im.save(buf, "PNG")
+        return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+    except Exception:
+        return ""
 
 
 def parse_toast(payload):
@@ -104,7 +155,7 @@ class NotifWatcher:
                 continue
             got = parse_toast(payload)
             if got:
-                out.append({"app": app_display_name(aumid), "title": got[0], "body": got[1]})
+                out.append({"app": app_display_name(aumid), "title": got[0], "body": got[1], "image": toast_image(payload)})
         return out
 
 

@@ -399,3 +399,57 @@ html.motion-reduced .bars i, html.motion-reduced .rec-dot, html.motion-reduced .
   .wg-battery .bt-top { flex-direction: column; gap: 6px; }
   .wg-battery .bt-big { font-size: 22px; }
 }
+
+/* ================================================================ cleaner pages (review 2026-10-03)
+   No outline on the tiles (just a soft fill), the same gap on the left and
+   the right (the page dots and the settings buttons sit inside that gap),
+   and text that breathes: no negative tracking on body text, roomier lines. */
+.pg.pg-board { padding: 14px 22px; }
+.pg-board .grid { gap: 10px; }
+.tile { box-shadow: none; background: rgba(255, 255, 255, 0.045); border-radius: 18px; }
+.boards .pg-dots { right: 8px; }
+.boards .gear { right: 3px; width: 17px; height: 17px; bottom: 9px; }
+.boards .gear.reload, .boards .last-music:not(.no-snap) .gear.reload { right: 3px; bottom: 30px; }
+.boards .gear svg { width: 13px; height: 13px; }
+.island { letter-spacing: 0; }
+.card .t, .ph, .pg-head, .title, .al-name, .hij { letter-spacing: -0.003em; }
+.row { line-height: 1.35; }
+.row .t1 { font-size: 12.5px; font-weight: 600; }
+.row .t2 { font-size: 11.5px; margin-top: 1px; }
+.tile > .wg { padding: 12px 14px; }
+.tile .ph { font-size: 13px; margin-bottom: 4px; }
+.card .body { line-height: 1.4; }
+.card .s { line-height: 1.35; }
+/* gauges: even spacing, short labels that never touch */
+.tile .gauges { justify-content: space-evenly; gap: 6px; }
+.tile .g { width: auto; min-width: 44px; }
+.tile .gl { font-size: 10.5px; }
+/* plan feedback: wraps and grows */
+.card textarea.fb { display: block; resize: none; overflow-y: auto; height: 26px; line-height: 1.35; white-space: pre-wrap; font-family: inherit; }
+/* the privacy dot fades out before the pill closes the gap; the slot glides */
+.pdot.out { opacity: 0 !important; transform: scale(0.4); }
+.mini .sl-r, .mini .sl-l { transition: margin 300ms var(--ease-w), transform 300ms var(--ease-w); }
+/* small cards (link copied, done...) sit in the middle of their card */
+.card { justify-content: center; }
+.card .ct { flex: 0 1 auto; }
+
+/* ---- GOAL: the scoring team's crest pops in, a ball rolls into it, "GOAL" sweeps */
+.card.goal { gap: 14px; }
+.goal-crest { position: relative; width: 52px; height: 52px; flex: none; display: grid; place-items: center; }
+.goal-crest img { width: 46px; height: 46px; object-fit: contain; animation: crest-pop 700ms var(--ease-w) both; filter: drop-shadow(0 2px 6px rgba(0,0,0,.5)); }
+.goal-crest .ball { position: absolute; left: -26px; bottom: 0; font-size: 18px; animation: ball-roll 900ms cubic-bezier(.25,.8,.3,1) 150ms both; }
+.goal-crest::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 2px solid var(--hop-green);
+  opacity: 0; animation: goal-ring 900ms ease-out 650ms both; }
+.goal-word { font-size: 19px; font-weight: 800; letter-spacing: 0.02em; line-height: 1.05;
+  background: linear-gradient(100deg, #fff 0%, #fff 40%, #7ef0a0 50%, #fff 60%, #fff 100%); background-size: 300% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent; animation: goal-sweep 1.6s ease 300ms 2 both; }
+.goal-line { margin-top: 3px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.goal-line .sc { font-variant-numeric: tabular-nums; margin: 0 5px; }
+.goal-line .hit { color: var(--hop-green); }
+.goal-sub { margin-top: 1px; font-size: 11.5px; color: var(--dim); }
+@keyframes crest-pop { 0% { transform: scale(0.3) rotate(-18deg); opacity: 0; } 60% { transform: scale(1.15) rotate(4deg); opacity: 1; } 100% { transform: none; } }
+@keyframes ball-roll { 0% { transform: translateX(0) rotate(0); opacity: 0; } 20% { opacity: 1; } 85% { transform: translateX(44px) rotate(540deg); opacity: 1; } 100% { transform: translateX(46px) rotate(560deg) scale(0.6); opacity: 0; } }
+@keyframes goal-ring { 0% { opacity: .9; transform: scale(0.7); } 100% { opacity: 0; transform: scale(1.35); } }
+@keyframes goal-sweep { from { background-position: 100% 0; } to { background-position: 0 0; } }
+html.motion-reduced .goal-crest *, html.motion-reduced .goal-word, html.motion-reduced .goal-crest::after { animation: none !important; }
+.goal-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px; }

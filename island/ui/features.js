@@ -197,9 +197,12 @@
   // ---- privacy dot
   function paintPrivacy() {
     const on = L().micCamDot !== false;
-    pdot.className = "pdot" + (on && state.cam.length ? " cam" : on && state.mic.length ? " mic" : "");
+    const want = on && state.cam.length ? " cam" : on && state.mic.length ? " mic" : "";
     pdot.title = [...state.cam.map((a) => a + " · camera"), ...state.mic.map((a) => a + " · microphone")].join("\n");
-    fitPill();                                       // the pill widens around the dot, still centred
+    clearTimeout(paintPrivacy.t);
+    if (want) { pdot.className = "pdot" + want; fitPill(); return; }   // the pill widens around the dot, still centred
+    pdot.classList.add("out");                       // going: fade the dot, then close the gap
+    paintPrivacy.t = setTimeout(() => { pdot.className = "pdot"; fitPill(); }, 260);
   }
 
   // ---- idle: tuck the pill away after a while with nothing happening
@@ -354,10 +357,13 @@
         }, { sticky: true, history: { app: a.name, title: "Question", text: a.question || "" } });
     } else if (a.kind === "plan") {
       popup("agent", `${head(`${a.name}: plan ready`)}<div class="plan scrolls">${esc(a.plan || "")}</div>
-        <input class="fb" id="aFb" placeholder="Feedback (optional), then Keep planning">
+        <textarea class="fb" id="aFb" rows="1" placeholder="Feedback (optional), then Keep planning"></textarea>
         <div class="btns"><button class="pbtn ok2" id="aGo">Approve</button><button class="pbtn" id="aMore">Keep planning</button></div></div>`,
         360, 196, () => {
           document.querySelector(".card").classList.add("tall");
+          const fb = $("aFb");
+          fb.addEventListener("input", () => { fb.style.height = "auto"; fb.style.height = Math.min(54, fb.scrollHeight) + "px"; });
+          fb.addEventListener("keydown", (e) => e.stopPropagation());
           $("aGo").onclick = () => { call("agent_answer", a.id, "allow"); H.hideCard(); };
           $("aMore").onclick = () => { call("agent_answer", a.id, { deny: $("aFb").value || "Keep planning." }); H.hideCard(); };
         }, { sticky: true, history: { app: a.name, title: "Plan", text: (a.plan || "").slice(0, 80) } });
@@ -502,7 +508,7 @@
         <span class="ic-sq" style="width:20px;height:20px;border-radius:6px;font-size:10px;background:${APPC[h.app] || "#3a3a3c"};color:#fff;display:grid;place-items:center">${esc(letter(h.app))}</span>
         <div class="grow"><div class="t1">${esc(h.title || h.app)}</div><div class="t2">${esc(h.text || h.app || "")}</div></div>
         <span class="tm">${H.ago(h.at / 1000)}</span></div>`).join("")
-      : `<div class="empty-note">Nothing yet. Pop-ups you get (and the ones held back in quiet hours or games) land here.</div>`;
+      : `<div class="empty-note">No notifications yet</div>`;
   }
   $("alClear").addEventListener("click", () => { state.history = []; store.set("history", []); paintAlerts(); });
 
@@ -552,9 +558,20 @@
     for (const m of ms) {
       const k = m.id, sc = `${m.hs}-${m.as}`;
       if (lastScores[k] && lastScores[k] !== sc && m.live) {
-        popup("sports", `<div class="ic-sq" style="background:#fff">⚽</div><div class="ct"><div class="s">${esc(m.league)} · ${esc(m.status)}</div>
-          <div class="t">${esc(m.home)} ${m.hs} – ${m.as} ${esc(m.away)}</div></div>`, 320, 72, null,
-          { history: { app: "Scores", title: `${m.home} ${m.hs} – ${m.as} ${m.away}`, text: m.status } });
+        // who scored: the side whose number went up. Their crest pops in, a
+        // ball rolls into it and "GOAL" sweeps across, like Google's live card.
+        const [ph, pa] = lastScores[k].split("-").map(Number);
+        const homeScored = +m.hs > ph, side = homeScored ? "home" : "away";
+        const logo = m[side + "Logo"], team = m[side];
+        const soccer = !m.sport || m.sport === "soccer";
+        const word = soccer ? "GOAL" : "SCORE";
+        const ball = { soccer: "⚽", basketball: "🏀", football: "🏈", hockey: "🏒", baseball: "⚾" }[m.sport || "soccer"] || "⚽";
+        popup("sports", `<div class="goal-crest">${logo ? `<img src="${esc(logo)}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${ball}',style:'font-size:30px'}))">` : `<span style="font-size:30px">${ball}</span>`}<span class="ball">${ball}</span></div>
+          <div class="ct"><div class="goal-word">${word}!</div>
+          <div class="goal-line"><span class="${homeScored ? "hit" : ""}">${esc(m.home)}</span><span class="sc">${m.hs} – ${m.as}</span><span class="${homeScored ? "" : "hit"}">${esc(m.away)}</span></div>
+          <div class="goal-sub">${esc(team)} · ${esc(m.status)} · ${esc(m.league)}</div></div>`, 340, 92, () => {
+            document.querySelector(".card").classList.add("goal");
+          }, { history: { app: "Scores", title: `${m.home} ${m.hs} – ${m.as} ${m.away}`, text: m.status } });
       }
       lastScores[k] = sc;
     }
@@ -725,7 +742,7 @@
       <div class="trim" id="trim"><div class="tr-rail"></div><div class="tr-sel" id="trSel"></div><div class="tr-h" id="trA"></div><div class="tr-h" id="trB"></div></div>
       <div class="trim-lbl" id="trLbl"></div>
       <div class="btns"><button class="pbtn warn" id="trSave">Save</button><button class="pbtn" id="trNo">Cancel</button></div></div>`,
-      360, 112, 0, () => {
+      380, 140, 0, () => {
         const v = document.querySelector(".card video"), bar = $("trim");
         const paint = () => {
           const w = bar.offsetWidth;

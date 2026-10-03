@@ -725,7 +725,8 @@ class Features:
                 w.last = w._newest()
                 continue
             for n in w.poll():
-                self.js("notif", {"app": n["app"], "title": n["title"], "text": n["body"]})
+                icon = watch.image_data_url(n["image"]) if n.get("image") else ""
+                self.js("notif", {"app": n["app"], "title": n["title"], "text": n["body"], "icon": icon})
 
     def calendar_loop(self):
         last_url, last_fetch = None, 0
@@ -1194,6 +1195,8 @@ def scores(teams):
             state = st.get("state", "pre")
             status = st.get("shortDetail") or st.get("detail") or ""
             out.append({"id": e.get("id"), "league": lname, "home": home["team"].get("shortDisplayName", "?"),
+                        "homeLogo": home["team"].get("logo", ""), "awayLogo": away["team"].get("logo", ""),
+                        "sport": options.LEAGUES[league].split("/")[0],
                         "away": away["team"].get("shortDisplayName", "?"), "hs": home.get("score", "0"), "as": away.get("score", "0"),
                         "state": state, "live": state == "in", "status": status})
     return out

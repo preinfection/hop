@@ -251,7 +251,14 @@
   $("gear").addEventListener("click", () => api.openSettings());
   $("reload").addEventListener("click", () => api.restartApp());
   island.addEventListener("wheel", (e) => {
-    if (!isOpen || e.target.closest(".vol-btn, .vol-row, .scrolls")) return;   // the speaker scrolls the volume
+    if (!isOpen || e.target.closest(".vol-btn, .vol-row, .tm-big")) return;   // the speaker scrolls the volume, the timer its time
+    // a list (agents, calendar, notes...) scrolls itself while it can; at its
+    // end, or if it's too short to scroll, the wheel moves to the next page
+    const sc = e.target.closest(".scrolls, .rows, .plan");
+    if (sc && sc.scrollHeight > sc.clientHeight + 1) {
+      const can = e.deltaY > 0 ? sc.scrollTop + sc.clientHeight < sc.scrollHeight - 1 : sc.scrollTop > 0;
+      if (can) return;
+    }
     e.preventDefault();
     const how = (layout && layout.wheel) || "pages";
     if (how === "none") return;
@@ -371,7 +378,10 @@
       if (!s) return;
       gauge("cpu", s.cpu, `${Math.round(s.cpu)}%`);
       gauge("gpu", s.gpu, s.gpu == null ? "–" : `${Math.round(s.gpu)}%`);
-      if (s.ram) gauge("ram", (100 * s.ram.used) / s.ram.total, `${Math.round((100 * s.ram.used) / s.ram.total)}%`, `RAM ${gb(s.ram.used)}`);
+      if (s.ram) {
+        gauge("ram", (100 * s.ram.used) / s.ram.total, `${Math.round((100 * s.ram.used) / s.ram.total)}%`, "RAM");
+        const g = document.querySelector('.g[data-k="ram"]'); if (g) g.title = `${gb(s.ram.used)} of ${gb(s.ram.total)} in use`;
+      }
       for (const slot of ["C", "E"]) {
         const d = (s.disks || {})[slot], g = document.querySelector(`.g[data-k=disk${slot}]`);
         if (g) g.hidden = !d;                   // one drive only: the second gauge goes
@@ -385,7 +395,7 @@
       if (speedBusy) return;
       const b = $("aPing");
       b.querySelector("span").textContent = ms == null ? "–" : `${ms}`;
-      $("pingLabel").textContent = ms == null ? "Offline" : "Ping ms";
+      $("pingLabel").textContent = ms == null ? "Offline" : "Ping";
       b.classList.toggle("slow", ms != null && ms >= 80 && ms < 150);
       b.classList.toggle("bad", ms == null || ms >= 150);
     });
@@ -479,7 +489,7 @@
   function fitCard() {
     card.style.width = "max-content";
     // up to the open island's width: a long line makes the card wider, not wrapped
-    const w = Math.min(Math.max(360, ((layout && layout.openW) || 360) - 20), 560, Math.max(220, card.offsetWidth + 10));   // +10: fonts can measure a hair narrow
+    const w = Math.min(Math.max(360, ((layout && layout.openW) || 360) - 20), 560, Math.max(200, card.offsetWidth + (card.querySelector(".body.one") ? 10 : 0)));   // a one-line command: fonts can measure a hair narrow
     card.style.width = "";
     island.style.setProperty("--card-w", w + "px");
   }

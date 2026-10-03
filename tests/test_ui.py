@@ -63,7 +63,7 @@ def classes(frame):
 # ================================================================ it opens
 def test_opens_with_everything(app):
     pg, frame, _ = app
-    assert pg.locator(".pg-row").count() == len(host.PAGE_IDS)        # every page listed...
+    assert pg.locator("#pages .pg-row").count() == len(host.PAGE_IDS)   # every page listed...
     assert pg.locator("#chips .chip").count() == 4                     # ...the 4 classic ones showing (newer ones start hidden)
     assert pg.get_attribute("#brandImg", "src").startswith("brand-island")
     assert "playing" in classes(frame) or "empty" in classes(frame)
