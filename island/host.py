@@ -30,6 +30,7 @@ import urllib.request
 import webview
 
 import extras
+import options
 import prayer
 from winrt.windows.media.control import (
     GlobalSystemMediaTransportControlsSessionManager as SessionManager,
@@ -109,7 +110,8 @@ DEFAULTS = {"lyricOffsetMs": 0, "startAtLogin": False, "opacity": 100, "demoMode
 
 # The island's LAYOUT, edited in the settings window (settings.html) and
 # applied live. Page order is `pages`; `hidden` pages are left out.
-PAGE_IDS = ["music", "today", "clips", "pc"]
+CORE_PAGES = ["music", "today", "clips", "pc"]
+PAGE_IDS = CORE_PAGES + options.NEW_PAGES
 LAYOUT_DEFAULTS = {
     "pages": list(PAGE_IDS), "hidden": [],
     "musicLeft": "rec",        # rec | art | none
@@ -131,6 +133,8 @@ LAYOUT_DEFAULTS = {
     "scale": 1.0,              # size of the whole island, 0.7 - 1.5
 }
 BOOL_KEYS = [k for k, v in LAYOUT_DEFAULTS.items() if isinstance(v, bool)]
+LAYOUT_DEFAULTS.update(options.DEFAULTS)                 # shape, colours, motion, pop-ups... (options.py)
+LAYOUT_DEFAULTS["hidden"] = list(options.NEW_PAGES)
 SCALE_RANGE = (0.7, 1.5)
 
 
@@ -142,6 +146,8 @@ def clean_layout(raw, legacy_pages34=True):
     pages = [p for p in raw.get("pages", []) if p in PAGE_IDS]
     L["pages"] = list(dict.fromkeys(pages + [p for p in PAGE_IDS if p not in pages]))
     L["hidden"] = [p for p in dict.fromkeys(raw.get("hidden", [])) if p in PAGE_IDS]
+    # a page the stored layout has never listed (added in a newer Hop) starts hidden
+    L["hidden"] += [p for p in options.NEW_PAGES if p not in pages and p not in L["hidden"]]
     if len(L["hidden"]) >= len(PAGE_IDS):                  # at least one page stays
         L["hidden"] = [p for p in L["hidden"] if p != "music"]
     for k, allowed in (("musicLeft", ("rec", "art", "none")), ("musicRight", ("prayer", "bars", "clock", "none")),
@@ -155,6 +161,7 @@ def clean_layout(raw, legacy_pages34=True):
         L["scale"] = round(min(SCALE_RANGE[1], max(SCALE_RANGE[0], float(raw.get("scale", 1.0)))), 2)
     except (TypeError, ValueError):
         pass
+    L.update(options.clean(raw))
     return L
 
 
@@ -378,7 +385,7 @@ class Island:
         # WebView2 flash for half a second on every hover). Only its clickable
         # region changes; see set_region.
         s = self.scale()
-        w, h = WINDOW[0] * s, WINDOW[1] * s
+        w, h = self.window_size()[0] * s, self.window_size()[1] * s
         l, t, r, b = self.work_area()
         pos = self.cfg.get("windowPosition")
         if pos and isinstance(pos, dict) and "cx" in pos:
@@ -387,12 +394,32 @@ class Island:
             self.set_bounds(l + (r - l - w) / 2, t + self.top_gap() * s, w, h)
 
     def compact(self):
-        """The closed island's size in CSS px for the current style."""
-        return NOTCH if getattr(self, "layout", {}).get("style") == "notch" else COMPACT
+        """The closed island's size in CSS px for the current style (the
+        settings app can change both: pillW / pillH, notchW / notchH)."""
+        L = getattr(self, "layout", {}) or {}
+        if L.get("style") == "notch":
+            return (L.get("notchW", NOTCH[0]), L.get("notchH", NOTCH[1]))
+        return (L.get("pillW", COMPACT[0]), L.get("pillH", COMPACT[1]))
+
+    def open_size(self):
+        """The open island in CSS px (openW / openH in the settings app)."""
+        L = getattr(self, "layout", {}) or {}
+        return (L.get("openW", EXPANDED[0]), L.get("openH", EXPANDED[1]))
+
+    def window_size(self):
+        """The fixed window the island animates inside: the open size, the
+        volume row under it, and room for the glow if it is switched on."""
+        w, h = self.open_size()
+        glow = 24 if (getattr(self, "layout", {}) or {}).get("glow") else 0
+        return (max(w, self.compact()[0]) + glow, h + VOL_EXTRA + 4 + glow // 2)
 
     def top_gap(self):
-        """CSS px between the top of the screen and the island: the notch sits on the edge."""
-        return 0 if getattr(self, "layout", {}).get("style") == "notch" else 10
+        """CSS px between the top of the screen and the island: the notch sits
+        on the edge, the pill 10 px below it, unless the settings say otherwise."""
+        L = getattr(self, "layout", {}) or {}
+        if L.get("topGap", -1) >= 0:
+            return L["topGap"]
+        return 0 if L.get("style") == "notch" else 10
 
     # ---- the API the bridge calls (window.pywebview.api.*)
     def get_state(self):
@@ -573,7 +600,7 @@ class Island:
         """The closed pill grows for a live activity (prayer countdown,
         charging, Bluetooth): widen its region first (the page narrows it again
         only after the shrink animation)."""
-        self.pill_w = max(self.compact()[0], min(EXPANDED[0], int(px or self.compact()[0])))
+        self.pill_w = max(self.compact()[0], min(self.open_size()[0], int(px or self.compact()[0])))
         if not self.expanded:
             ui_thread(self.window, lambda: self.set_region(False))
         return True
@@ -829,17 +856,18 @@ class Island:
 
     def set_layout(self, raw):
         new = clean_layout(raw)
-        old_scale = self.layout.get("scale", 1.0)
-        old_style = self.layout.get("style", "pill")
+        geo = lambda L: tuple(L.get(k) for k in ("openW", "openH", "glow", "pillW", "pillH", "notchW", "notchH"))
+        old_scale, old_geo = self.layout.get("scale", 1.0), geo(self.layout)
+        old_place = (self.layout.get("style", "pill"), self.layout.get("topGap", -1))
         self.layout = new
         self.cfg["layout"] = new
         write_config(self.cfg)
         if self.settings_win is not None:
             self._title_bar()
         if self.window:
-            if new["scale"] != old_scale:
+            if new["scale"] != old_scale or geo(new) != old_geo:
                 ui_thread(self.window, self._apply_scale)
-            if new["style"] != old_style:
+            if (new["style"], new["topGap"]) != old_place or geo(new) != old_geo:
                 ui_thread(self.window, self._apply_style)
             self.window.run_js(f"window.__islandLayout && window.__islandLayout({json.dumps(new)})")
         return dict(new)
@@ -863,7 +891,7 @@ class Island:
         """New island size: the window grows or shrinks around its top middle."""
         x, y, w, _ = self.rect()
         s = self.scale()
-        nw, nh = WINDOW[0] * s, WINDOW[1] * s
+        nw, nh = self.window_size()[0] * s, self.window_size()[1] * s
         self.set_bounds(x + w / 2 - nw / 2, y, nw, nh)
         self.set_region(self.expanded)
 
@@ -1172,7 +1200,8 @@ class Island:
                 last = getattr(self, "_display_sig", None)
                 _, _, cw, ch = self.rect()
                 s_ = self.scale()
-                wrong_size = abs(cw - WINDOW[0] * s_) > 2 or abs(ch - WINDOW[1] * s_) > 2
+                ww, wh = self.window_size()
+                wrong_size = abs(cw - ww * s_) > 2 or abs(ch - wh * s_) > 2
                 if (sig and last and sig != last) or wrong_size:
                     dbg("display changed", last, "->", sig)
                     # twice: now, and once Windows has finished moving things
@@ -1195,7 +1224,7 @@ class Island:
                 u32.GetCursorPos(ctypes.byref(pt))
                 x, y, w, _ = self.rect()
                 s = self.scale()
-                pw, ph = (EXPANDED if is_open else (getattr(self, "pill_w", self.compact()[0]), self.compact()[1]))
+                pw, ph = (self.open_size() if is_open else (getattr(self, "pill_w", self.compact()[0]), self.compact()[1]))
                 if is_open:
                     ph += self.extra
                 pw, ph = pw * s, ph * s
@@ -1217,6 +1246,8 @@ class Island:
                 quiet = dragging or time.time() - getattr(self, "_drag_at", 0) < 0.6 or getattr(self, "_quiet_until_leave", False)
                 # Opens with music playing, or whenever the clipper is there (record button).
                 playing = bool(self.playback and not self.playback.get("empty")) or getattr(self, "rec", (False, 0))[0]
+                # ...or always, once a page other than the player is switched on
+                playing = playing or any(p in options.NEW_PAGES and p not in self.layout["hidden"] for p in self.layout["pages"])
                 now = time.time()
                 if inside != getattr(self, "_dbg_in", None) or is_open != getattr(self, "_dbg_open", None):
                     self._dbg_in, self._dbg_open = inside, is_open
@@ -1227,7 +1258,25 @@ class Island:
                     entered_at = now
                 # Open only after the cursor RESTS on the pill for a moment, so
                 # sweeping past it (e.g. while gaming) doesn't pop it open.
-                if inside and not is_open and (playing or held) and not (quiet and not held) and now - entered_at >= 0.25:
+                # (Settings: how long it waits, or open on a click instead.)
+                L = self.layout
+                by_click = L.get("openOn") == "click"
+                clicked = False
+                if by_click:
+                    down = bool(dragging)
+                    if down and not getattr(self, "_was_down", False) and inside:
+                        self._press = (pt.x, pt.y, now)
+                    elif not down and getattr(self, "_was_down", False) and inside and getattr(self, "_press", None):
+                        px_, py_, pt_ = self._press
+                        clicked = abs(pt.x - px_) + abs(pt.y - py_) < 6 and now - pt_ < 0.5
+                        self._press = None
+                    self._was_down = down
+                peek = getattr(self, "peek", False)            # the global hotkey
+                if peek:
+                    inside, entered_at = True, entered_at or 0.0
+                rest = L.get("hoverDelay", 250) / 1000.0
+                wants = (clicked or held or peek) if by_click else (now - entered_at >= rest if entered_at is not None else False)
+                if inside and not is_open and (playing or held or peek) and not (quiet and not (held or peek or clicked)) and wants:
                     left_at, closed_at = None, None
                     if not self.expanded:
                         ui_thread(self.window, lambda: self.set_region(True))
@@ -1237,7 +1286,7 @@ class Island:
                     left_at = None
                 elif is_open:
                     left_at = left_at or now
-                    if now - left_at > 0.3:
+                    if now - left_at > 0.3 + L.get("closeDelay", 0) / 1000.0:
                         is_open, closed_at = False, now
                         self.extra = 0                  # the volume row closes with the island
                         self.window.run_js("window.__islandHover && window.__islandHover(false)")
@@ -1270,6 +1319,12 @@ class Island:
                 await s.try_skip_next_async()
             elif action == "previous":
                 await s.try_skip_previous_async()
+            elif action == "shuffle":
+                await s.try_change_shuffle_active_async(not s.get_playback_info().is_shuffle_active)
+            elif action == "repeat":
+                from winrt.windows.media import MediaPlaybackAutoRepeatMode as Rep
+                cur = int(s.get_playback_info().auto_repeat_mode or 0)
+                await s.try_change_auto_repeat_mode_async(Rep({0: 2, 2: 1, 1: 0}[cur]))   # off -> all -> one -> off
         except Exception:
             pass
         await self._refresh()
@@ -1413,9 +1468,15 @@ class Island:
             self._online_tried.add(key)
             threading.Thread(target=self._online_cover, args=(key, props.title, props.artist),
                              daemon=True).start()
+        try:                                            # Spotify reports both to Windows (None: the app doesn't)
+            shuffle = info.is_shuffle_active
+            repeat = {0: "off", 1: "one", 2: "all"}.get(int(info.auto_repeat_mode), "off") if info.auto_repeat_mode is not None else None
+        except Exception:
+            shuffle, repeat = None, None
         self.playback = {"empty": not props.title, "isPlaying": playing, "progressMs": int(position),
                          "durationMs": int(duration), "track": props.title or "", "artist": props.artist or "",
                          "album": props.album_title or "", "artworkUrl": art, "uri": key,
+                         "shuffle": shuffle, "repeat": repeat, "app": (s.source_app_user_model_id or ""),
                          "_sampled": time.time()}
         self.status = "Windows media" if props.title else "Nothing playing"
         if new_track:
@@ -1701,7 +1762,7 @@ def main():
                           "--disable-background-networking --renderer-process-limit=1")
     s = u32.GetDpiForSystem() / 96.0
     island.window = webview.create_window(
-        "Lyrics Island", page, js_api=IslandApi(island), width=WINDOW[0], height=WINDOW[1],
+        "Lyrics Island", page, js_api=IslandApi(island), width=island.window_size()[0], height=island.window_size()[1],
         frameless=True, transparent=True, on_top=True, resizable=False, easy_drag=False,
         focus=False, background_color="#000000")
 
