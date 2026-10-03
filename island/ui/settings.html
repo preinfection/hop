@@ -467,9 +467,11 @@
   let chipOn = 0;
   function renderChips(active) {
     if (active != null) chipOn = active;
-    const ids = L.pages.filter((p) => !L.hidden.includes(p));
-    chipOn = Math.min(chipOn, ids.length - 1);
-    $("chips").innerHTML = ids.map((id, i) => `<button class="chip ${i === chipOn ? "on" : ""}" data-i="${i}">${(NAMES[id] || [id])[0]}</button>`).join("");
+    // widget pages: one chip per page, by its name
+    const names = L.pageMode === "boards" && L.boards ? L.boards.map((b) => b.name)
+      : L.pages.filter((p) => !L.hidden.includes(p)).map((id) => (NAMES[id] || [id])[0]);
+    chipOn = Math.min(chipOn, names.length - 1);
+    $("chips").innerHTML = names.map((n, i) => `<button class="chip ${i === chipOn ? "on" : ""}" data-i="${i}">${esc(n)}</button>`).join("");
   }
   $("chips").addEventListener("click", (e) => { const b = e.target.closest(".chip"); if (b) showPage(+b.dataset.i); });
   // hovering a section about one page shows that page in the preview

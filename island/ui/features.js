@@ -146,7 +146,9 @@
     const Lx = L(); if (!Lx.pillW) return;
     const base = Lx.style === "notch" ? Lx.notchW : Lx.pillW;
     const l = slotBox.l.offsetWidth, c = slotBox.c.offsetWidth, r = slotBox.r.offsetWidth;
-    const need = Math.ceil(c ? c + 2 * Math.max(14 + l, 17 + r) : l + r + 34);
+    const dot = pdot.classList.contains("mic") || pdot.classList.contains("cam") ? 11 : 0;    // room for the privacy dot
+    island.classList.toggle("pdot-on", !!dot);
+    const need = Math.ceil(c ? c + 2 * Math.max(14 + l, 17 + r + dot) : l + r + 34 + dot);
     const w = Math.max(base, Math.min(Lx.openW, need));
     if (w === fitW) return;
     fitW = w;
@@ -183,7 +185,6 @@
       if (kind === "timer" && (timer.running || (timer.mode === "watch" && timer.elapsed > 0 && timer.running))) { text = fmtTimer(); color = "var(--hop-orange)"; break; }
       if (kind === "agent" && state.agents.some((s) => s.status === "ask")) { text = "Agent waiting"; color = "var(--hop-orange)"; pulse = true; break; }
       if (kind === "focus" && state.focus) { text = "☾ Focus"; color = "var(--hop-purple)"; break; }
-      if (kind === "mic" && state.mic.length) { text = "● Mic on"; color = "var(--hop-orange)"; break; }
     }
     if (live.textContent !== text) live.textContent = text;
     live.style.setProperty("--live-c", color);
@@ -198,6 +199,7 @@
     const on = L().micCamDot !== false;
     pdot.className = "pdot" + (on && state.cam.length ? " cam" : on && state.mic.length ? " mic" : "");
     pdot.title = [...state.cam.map((a) => a + " · camera"), ...state.mic.map((a) => a + " · microphone")].join("\n");
+    fitPill();                                       // the pill widens around the dot, still centred
   }
 
   // ---- idle: tuck the pill away after a while with nothing happening
@@ -249,7 +251,7 @@
   function activity(kind, w, html, ms) {
     const P = (L().popups || {})[kind];
     if (P && !P.on) return;
-    if (quietNow() && kind !== "caps") return;
+    if (quietNow()) return;
     clearTimeout(actTimer);
     H.growPill(w).then(() => {
       $("actView").innerHTML = html;
@@ -304,12 +306,12 @@
   document.addEventListener("focusout", (e) => { if (e.target.closest("[contenteditable], input, textarea")) call("want_keys", false); });
 
   // ---------------------------------------------------------------- AGENTS
-  const AGENT = {
-    claude: ["#d97757", "C"], codex: ["#10a37f", "X"], gemini: ["#4f8cf7", "G"], cursor: ["#e6e6e6", "Cu"],
-    copilot: ["#8957e5", "Co"], other: ["#8e8e93", "•"],
-  };
+  // each tool's own mark (logos.js: simple-icons, no background), not a letter tile
+  const LOGO = window.__hopLogos || {};
+  const AGENT_LOGO = { claude: "claude", codex: "openai", chatgpt: "openai", openai: "openai", gemini: "googlegemini",
+                       copilot: "githubcopilot", cursor: "cursor" };
   const ST = { work: "Working", ask: "Needs you", done: "Done", idle: "Idle" };
-  const mascot = (tool, status) => { const [c, l] = AGENT[tool] || AGENT.other; return `<span class="mascot ${status}" style="background:${c}">${l}</span>`; };
+  const mascot = (tool, status, big) => `<span class="mascot ${status}${big ? " big" : ""}">${LOGO[AGENT_LOGO[tool]] || LOGO.anthropic || ""}</span>`;
   function paintAgents() {
     const rows = $("agRows");
     if (!rows) return;
@@ -322,14 +324,14 @@
     rows.querySelectorAll(".row[data-i]").forEach((r) => r.addEventListener("click", () => call("agent_jump", ss[+r.dataset.i].id)));
     const u = state.usage, box = $("agUsage");
     box.hidden = !u;
-    if (u) box.innerHTML = [["5-hour", u.five, u.fiveReset], ["Week", u.week, u.weekReset]].map(([n, p, r]) =>
-      `<div style="flex:1">${n} · ${Math.round(p)}%${r ? ` · resets ${esc(r)}` : ""}<div class="bar"><i class="${p >= 80 ? "hot" : ""}" style="width:${Math.min(100, p)}%"></i></div></div>`).join("");
+    if (u) box.innerHTML = [["5h", u.five, u.fiveReset], ["Week", u.week, u.weekReset]].map(([n, p, r]) =>
+      `<div style="flex:1;min-width:0;white-space:nowrap" title="${r ? "Resets in " + esc(r) : ""}"><b style="color:#fff;font-weight:600">${Math.round(p)}%</b> ${n}${r ? ` · ${esc(r)}` : ""}<div class="bar"><i class="${p >= 80 ? "hot" : ""}" style="width:${Math.min(100, p)}%"></i></div></div>`).join("");
   }
   function agentCard(a) {
     if (!L().agentsOn) return;
-    const head = (t) => `${mascot(a.tool, "ask").replace("mascot", "ic-sq mascot")}<div class="ct"><div class="t">${esc(t)}</div>`;
+    const head = (t) => `${mascot(a.tool, "ask", true)}<div class="ct"><div class="t">${esc(t)}</div>`;
     if (a.kind === "permission") {
-      popup("agent", `${head(`${a.name} wants to ${a.verb || "run"}`)}<div class="body">${esc(a.summary || "")}</div>
+      popup("agent", `${head(`${a.name} wants to ${a.verb || "run"}`)}<div class="body one code" title="${esc(a.summary || "")}">${esc(a.summary || "")}</div>
         <div class="btns"><button class="pbtn ok2" id="aAllow">Allow</button><button class="pbtn no" id="aDeny">Deny</button><button class="pbtn" id="aTerm" title="Answer in the terminal instead">Terminal</button></div></div>`,
         340, 112, () => {
           $("aAllow").onclick = () => { call("agent_answer", a.id, "allow"); H.hideCard(); };
@@ -360,9 +362,9 @@
           $("aMore").onclick = () => { call("agent_answer", a.id, { deny: $("aFb").value || "Keep planning." }); H.hideCard(); };
         }, { sticky: true, history: { app: a.name, title: "Plan", text: (a.plan || "").slice(0, 80) } });
     } else if (a.kind === "done") {
-      popup("agent", `${mascot(a.tool, "done").replace("mascot", "ic-sq mascot")}<div class="ct"><div class="t">${esc(a.name)} is done</div>
+      popup("agent", `${mascot(a.tool, "done", true)}<div class="ct"><div class="t">${esc(a.name)} is done</div>
         <div class="body">${esc(a.summary || "Finished its turn")}</div>
-        <div class="btns"><button class="pbtn go" id="aJump">Jump to it</button></div></div>`, 320, 100, () => {
+        <div class="btns"><button class="pbtn go" id="aJump">Jump to it</button></div></div>`, 340, a.summary && a.summary.length > 44 ? 120 : 100, () => {
           $("aJump").onclick = () => { call("agent_jump", a.session); H.hideCard(); };
         }, { history: { app: a.name, title: "Done", text: a.summary || "" } });
     }
@@ -597,7 +599,7 @@
     $("btFill").classList.toggle("low", (b.pct || 0) <= 15);
     const left = b.minutes ? `${Math.floor(b.minutes / 60)}h ${b.minutes % 60}m ${b.charging ? "to full" : "left"}` : b.charging ? "Charging" : "";
     $("btMeta").innerHTML = [left && `<b>${left}</b>`, b.health != null && `Health <b>${b.health}%</b>${b.cycles ? ` · ${b.cycles} cycles` : ""}`,
-      b.design && `${(b.full / 1000).toFixed(1)} of ${(b.design / 1000).toFixed(1)} Wh`].filter(Boolean).join("<br>");
+      b.design && `${(b.full / 1000).toFixed(1)} of ${(b.design / 1000).toFixed(1)} Wh`].filter(Boolean).map((x, i) => `<div class="ln${i}">${x}</div>`).join("");
     const ds = (b.drainers || []).slice(0, 3);
     $("btRows").innerHTML = ds.length ? `<div class="bt-chips"><span class="lbl">Using most</span>${ds.map((d) => `<span class="chip">${esc(d.name)} <b>${d.cpu.toFixed(0)}%</b></span>`).join("")}</div>` : "";
   }
@@ -605,27 +607,88 @@
   // ---------------------------------------------------------------- EXTENSIONS (your own pages)
   function applyExtensions(L) {
     const on = new Set(L.extensions || []);
-    document.querySelectorAll(".pg[data-ext]").forEach((p) => { if (!on.has(p.dataset.ext)) p.remove(); });
+    document.querySelectorAll(".pg[data-ext]").forEach((p) => {
+      if (on.has(p.dataset.ext)) return;
+      const box = WG[p.dataset.id];
+      if (box) { box.remove(); delete WG[p.dataset.id]; }
+      p.remove();
+    });
     for (const x of state.extensions) {
       if (!on.has(x.id) || document.querySelector(`.pg[data-ext="${x.id}"]`)) continue;
       const pg = document.createElement("div");
       pg.className = "pg pg-ext";
       pg.dataset.id = "ext-" + x.id;
       pg.dataset.ext = x.id;
-      pg.innerHTML = `<iframe sandbox="allow-scripts" src="${esc(x.url)}" title="${esc(x.name)}"></iframe>`;
+      const box = document.createElement("div");
+      box.className = "wg wg-ext";
+      box.dataset.w = pg.dataset.id;
+      box.innerHTML = `<iframe sandbox="allow-scripts" src="${esc(x.url)}" title="${esc(x.name)}"></iframe>`;
+      pg.appendChild(box);
+      WG[pg.dataset.id] = box;
       full.insertBefore(pg, dots);
     }
   }
   // an extension may ask for a pop-up: postMessage({hop: "popup", title, text})
   window.addEventListener("message", (e) => {
     const m = e.data || {};
-    if (m.hop !== "popup" || !document.querySelector(".pg-ext iframe")) return;
-    const frame = [...document.querySelectorAll(".pg-ext iframe")].find((f) => f.contentWindow === e.source);
+    if (m.hop !== "popup") return;
+    const frame = [...document.querySelectorAll(".wg-ext iframe")].find((f) => f.contentWindow === e.source);
     if (!frame) return;
     popup("notif", `<div class="ic-sq" style="background:#3a3a3c;color:#fff">${esc(letter(frame.title))}</div><div class="ct"><div class="s">${esc(frame.title)}</div>
       <div class="t">${esc(String(m.title || "").slice(0, 80))}</div>${m.text ? `<div class="body">${esc(String(m.text).slice(0, 200))}</div>` : ""}</div>`,
       320, m.text ? 96 : 72, null, { history: { app: frame.title, title: m.title, text: m.text } });
   });
+
+  // ================================================================ BOARDS: pages made of widgets
+  // Every kind's content lives in one .wg box. In classic mode the boxes sit
+  // in their own full-size pages; in boards mode they move into the tiles of
+  // a 4 x 2 grid, a few per page, sized by the settings (s w t b f).
+  const WG = {};
+  document.querySelectorAll(".full .pg[data-id]").forEach((pg) => {
+    const box = document.createElement("div");
+    box.className = `wg wg-${pg.dataset.id}`;
+    box.dataset.w = pg.dataset.id;
+    while (pg.firstChild) box.appendChild(pg.firstChild);
+    pg.appendChild(box);
+    WG[pg.dataset.id] = box;
+  });
+  const NAME = { music: "Now playing", today: "Today", clips: "Clips", pc: "PC", agents: "Agents", timer: "Timer", calendar: "Calendar",
+                 alerts: "Notifications", shelf: "Shelf", notes: "Notes", sports: "Scores", prompter: "Teleprompter", battery: "Battery" };
+  let boardKey = "";
+  function home(w) {                                   // a widget back into its own classic page
+    const pg = document.querySelector(`.full .pg[data-id="${w}"]:not(.pg-board)`);
+    if (pg && WG[w] && WG[w].parentElement !== pg) pg.appendChild(WG[w]);
+  }
+  window.__hopBoards = (Lx) => {
+    applyExtensions(Lx);
+    const on = Lx.pageMode === "boards";
+    const key = on ? JSON.stringify(Lx.boards) + "|" + Object.keys(WG).join() : "";
+    if (key === boardKey) return;
+    boardKey = key;
+    Object.keys(WG).forEach(home);
+    document.querySelectorAll(".full .pg-board").forEach((b) => b.remove());
+    if (!on) return;
+    (Lx.boards || []).forEach((b, i) => {
+      const pg = document.createElement("div");
+      pg.className = "pg pg-board";
+      pg.dataset.id = "board-" + i;
+      pg.dataset.name = b.name;
+      const ws = b.widgets.filter((w) => WG[w.w]);
+      pg.dataset.widgets = ws.map((w) => w.w).join(",");
+      const grid = document.createElement("div");
+      grid.className = "grid";
+      for (const w of ws) {
+        const tile = document.createElement("div");
+        tile.className = `tile sz-${w.s} tile-${w.w.startsWith("ext-") ? "ext" : w.w}`;
+        tile.dataset.w = w.w;
+        tile.appendChild(WG[w.w]);
+        grid.appendChild(tile);
+      }
+      pg.appendChild(grid);
+      full.insertBefore(pg, dots);
+    });
+  };
+  window.__hopWidgetNames = () => ({ ...NAME, ...Object.fromEntries(state.extensions.map((x) => ["ext-" + x.id, x.name])) });
 
   // ================================================================ CARDS
   // ---- the clip-saved card: Open / Copy / Upload & copy link / Trim
@@ -831,7 +894,19 @@
     agents: (d) => { state.agents = d.sessions || []; state.usage = d.usage || null; if (H.pageId() === "agents") paintAgents(); liveTick(); },
     agentAsk: agentCard,
     agentEdit,
-    privacy: (d) => { state.mic = d.mic || []; state.cam = d.cam || []; paintPrivacy(); liveTick(); },
+    privacy: (d) => {
+      // an app that STARTS using the microphone or camera gets a 3 s pop-up; then just the dot
+      const fresh = (now, was, what) => now.filter((a) => !was.includes(a)).map((a) => [a, what]);
+      const news = [...fresh(d.cam || [], state.cam, "camera"), ...fresh(d.mic || [], state.mic, "microphone")];
+      state.mic = d.mic || []; state.cam = d.cam || [];
+      paintPrivacy(); liveTick();
+      if (news.length && L().micCamDot !== false) {
+        const [app, what] = news[0];
+        const c = what === "camera" ? "var(--hop-green)" : "var(--hop-orange)";
+        activity("privacy", Math.min(330, 190 + app.length * 7), `<div class="side"><i class="pd" style="background:${c}"></i><span class="name">${esc(app)}</span></div>
+          <div class="side"><span class="dim">is using your ${what}</span></div>`, (L().popups.privacy || {}).ms || 3000);
+      }
+    },
     game: (on) => {
       state.gaming = !!on;
       island.classList.toggle("gaming", state.gaming);
@@ -849,7 +924,6 @@
     },
     calSet: (on) => { state.calSet = !!on; },
     calendar: (evs) => { state.calendar = (evs || []).sort((a, b) => a.start - b.start); if (H.pageId() === "calendar") paintCalendar(); },
-    caps: (on) => activity("caps", 150, `<div class="side"><span class="kbd">⇪</span><span>Caps Lock</span></div><div class="side"><span style="color:${on ? "var(--hop-green)" : "var(--dim)"}">${on ? "On" : "Off"}</span></div>`),
     wifi: (w) => activity("wifi", w.ssid ? Math.min(280, 150 + w.ssid.length * 7) : 160,
       `<div class="side"><svg viewBox="0 0 24 24" fill="none" stroke="${w.ssid ? "#fff" : "#ff453a"}" stroke-width="2" stroke-linecap="round"><path d="M2 8.8a15 15 0 0 1 20 0M5.5 12.5a10 10 0 0 1 13 0M9 16a5 5 0 0 1 6 0"/><circle cx="12" cy="19" r="1" fill="#fff"/></svg><span class="name">${esc(w.ssid || "Wi-Fi off")}</span></div><div class="side"><span class="dim">${w.ssid ? "Connected" : "Disconnected"}</span></div>`),
     net: (n) => { state.net = n; paintSlots(); },

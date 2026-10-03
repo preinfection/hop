@@ -300,7 +300,6 @@
     snip: () => ev("snip", { thumb: thumb("#232526", "#414345", "Screenshot"), size: "1920 × 1080", name: "Screenshot 2026-10-03 170512.png", path: "C:\\demo\\shot.png" }),
     rain: () => ev("rain", { title: "Rain in about 15 min", text: "Toronto · 2.1 mm over the next hour" }),
     reminder: () => ev("reminder", { title: "Stretch", text: "Every 45 min" }),
-    caps: () => { H.caps = !H.caps; ev("caps", H.caps); },
     wifi: () => ev("wifi", { ssid: "BELL892" }),
     focus: () => { H.focus = !H.focus; ev("focus", H.focus); },
     game: () => { H.gaming = !H.gaming; ev("game", H.gaming); log("game mode", H.gaming ? "on (pop-ups held)" : "off"); },

@@ -187,11 +187,13 @@
     PAGES.forEach((p, i) => { p.classList.toggle("on", i === n); p.classList.toggle("above", i < n); });
     document.querySelectorAll(".pg-dots i").forEach((d, i) => d.classList.toggle("on", i === n));
     const id = pageId(n);
-    if (id !== "music") closeVol(true);
-    if (id === "today") paintToday();
-    if (id === "clips") loadClips();
-    pcActive(id === "pc");
-    if (window.__hopPage) window.__hopPage(id);
+    // a widget page (board) shows several kinds at once: each one wakes up
+    const ids = PAGES[n] && PAGES[n].dataset.widgets ? PAGES[n].dataset.widgets.split(",") : [id];
+    if (!ids.includes("music")) closeVol(true);
+    if (ids.includes("today")) paintToday();
+    if (ids.includes("clips")) loadClips();
+    pcActive(ids.includes("pc"));
+    if (window.__hopPage) ids.forEach((w) => window.__hopPage(w));
     island.classList.toggle("on-last", n === PAGES.length - 1);
     island.classList.toggle("last-music", pageId(PAGES.length - 1) === "music");
   }
@@ -208,16 +210,21 @@
   function applyLayout(L) {
     if (!L) return;
     layout = L;
-    const hidden = new Set(L.hidden || []);
+    // widget pages: features.js builds the boards first (their widgets move into them)
+    if (window.__hopBoards) window.__hopBoards(L);
+    const boards = L.pageMode === "boards" && document.querySelector(".full .pg-board");
+    const hidden = new Set(boards ? [] : L.hidden || []);
     ALL_PAGES = [...document.querySelectorAll(".full .pg")];       // extension pages may have been added
     const ext = ALL_PAGES.filter((p) => p.dataset.ext).map((p) => p.dataset.id);
-    const order = [...(L.pages || []), ...ext].filter((id) => ALL_PAGES.some((p) => p.dataset.id === id));
+    const order = (boards ? ALL_PAGES.filter((p) => p.classList.contains("pg-board")).map((p) => p.dataset.id)
+                          : [...(L.pages || []), ...ext]).filter((id) => ALL_PAGES.some((p) => p.dataset.id === id));
+    document.documentElement.classList.toggle("boards", !!boards);
     const byId = Object.fromEntries(ALL_PAGES.map((p) => [p.dataset.id, p]));
     const dots = document.querySelector(".pg-dots");
     order.forEach((id) => full.insertBefore(byId[id], dots));      // DOM order = page order
     ALL_PAGES.forEach((p) => p.classList.toggle("pg-off", hidden.has(p.dataset.id)));
     PAGES = order.filter((id) => !hidden.has(id)).map((id) => byId[id]);
-    if (!PAGES.length) PAGES = [byId.music];
+    if (!PAGES.length) PAGES = [byId.music || ALL_PAGES[0]];
     ALL_PAGES.forEach((p) => { if (!PAGES.includes(p)) p.classList.remove("on", "above"); });
     dots.innerHTML = PAGES.map(() => "<i></i>").join("");
     dots.style.display = PAGES.length > 1 ? "" : "none";
@@ -471,7 +478,8 @@
   }
   function fitCard() {
     card.style.width = "max-content";
-    const w = Math.min(360, Math.max(220, card.offsetWidth));
+    // up to the open island's width: a long line makes the card wider, not wrapped
+    const w = Math.min(Math.max(360, ((layout && layout.openW) || 360) - 20), 560, Math.max(220, card.offsetWidth + 10));   // +10: fonts can measure a hair narrow
     card.style.width = "";
     island.style.setProperty("--card-w", w + "px");
   }

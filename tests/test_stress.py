@@ -178,7 +178,7 @@ def test_pill_width_fuzz_never_below_the_style(hammer, style, floor):
     isl.set_layout({**isl.layout, "style": style})
     for v in [None, 0, -50, 1, 99, 3000, "abc" if False else 10, 199, 201, 600]:
         isl.set_pill_width(v)
-        assert floor <= isl.pill_w <= host.EXPANDED[0]
+        assert floor <= isl.pill_w <= isl.open_size()[0]                # never wider than the open island
 
 
 # 13

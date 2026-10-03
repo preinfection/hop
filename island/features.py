@@ -644,7 +644,6 @@ class Features:
     # ---- the watchers
     def watch_loop(self):
         tick = 0
-        caps = u32.GetKeyState(0x14) & 1
         ssid = wifi_ssid() if self.L().get("wifiPop") else None
         focus = focus_on()
         dl = NewFiles(DOWNLOADS())
@@ -656,12 +655,6 @@ class Features:
             tick += 1
             L = self.L()
             slow = self.pace()
-            # caps lock: every half second, it is one cheap call
-            c = u32.GetKeyState(0x14) & 1
-            if c != caps:
-                caps = c
-                if L.get("capsPop", True):
-                    self.js("caps", bool(c))
             if tick % max(1, int(2 * slow)) == 0:
                 self._front(L)
                 p = watch.privacy_in_use()

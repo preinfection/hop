@@ -33,6 +33,7 @@ def app(browser, sandbox):
         if os.path.exists(f):
             os.remove(f)
     isl = host.Island()
+    isl.set_layout({"pageMode": "pages"})          # these tests are about the classic pages (boards: test_boards.py)
     u32 = ctypes.windll.user32
     u32.CreateWindowExW.restype = ctypes.c_void_p
     hwnd = u32.CreateWindowExW(0x80, "STATIC", "hop-test-island", 0x80000000, 100, 10, 360, 196, None, None, None, None)
@@ -62,8 +63,8 @@ def classes(frame):
 # ================================================================ it opens
 def test_opens_with_everything(app):
     pg, frame, _ = app
-    assert pg.locator(".pg-row").count() == 4
-    assert pg.locator("#chips .chip").count() == 4
+    assert pg.locator(".pg-row").count() == len(host.PAGE_IDS)        # every page listed...
+    assert pg.locator("#chips .chip").count() == 4                     # ...the 4 classic ones showing (newer ones start hidden)
     assert pg.get_attribute("#brandImg", "src").startswith("brand-island")
     assert "playing" in classes(frame) or "empty" in classes(frame)
 
@@ -119,7 +120,7 @@ def test_theme(app, theme):
 
 
 # ================================================================ pages
-@pytest.mark.parametrize("page", host.PAGE_IDS)
+@pytest.mark.parametrize("page", host.CORE_PAGES)
 def test_hide_each_page(app, page):
     pg, frame, _ = app
     pg.click(f".pg-row[data-id={page}] .sw input", force=True)
@@ -139,7 +140,7 @@ def test_cannot_hide_last_page(app):
     assert "music" not in saved()["hidden"]
 
 
-@pytest.mark.parametrize("page,direction", [(p, d) for p in host.PAGE_IDS for d in (-1, 1)])
+@pytest.mark.parametrize("page,direction", [(p, d) for p in host.CORE_PAGES for d in (-1, 1)])
 def test_move_page(app, page, direction):
     pg, frame, _ = app
     before = saved()["pages"]
@@ -152,7 +153,8 @@ def test_move_page(app, page, direction):
     pg.wait_for_timeout(300)
     after = saved()["pages"]
     assert after.index(page) == i + direction
-    assert frame.evaluate("window.__islandPageIds()") == after
+    shown = [p for p in after if p not in saved()["hidden"]]
+    assert frame.evaluate("window.__islandPageIds()") == shown
 
 
 # the 4 core pages: 4! = 24 orders (all 13 pages would be 6 billion, which ran the PC out of memory)
@@ -160,7 +162,7 @@ def test_move_page(app, page, direction):
 def test_gear_on_last_page_any_order(app, order):
     """Whatever the order, the settings gear and refresh button sit on the last page."""
     pg, frame, isl = app
-    L = isl.set_layout({"pages": list(order)})
+    L = isl.set_layout({**isl.layout, "pages": list(order)})
     pg.evaluate("L => document.getElementById('pv').contentWindow.postMessage({t:'cmd', fn:'Layout', args:[L]}, '*')", L)
     pg.evaluate("n => document.getElementById('pv').contentWindow.postMessage({t:'cmd', fn:'SetPage', args:[n]}, '*')", 3)
     frame.wait_for_function("document.getElementById('island').classList.contains('on-last')")

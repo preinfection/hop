@@ -30,24 +30,30 @@
   const POP_NAMES = {
     notif: ["Windows notifications", "Discord, mail, Teams…"], agent: ["AI agents", "Approvals, questions, done"], download: ["Downloads", "A file finished downloading"],
     snip: ["Screenshots", "After Win + Shift + S"], calendar: ["Calendar", "An event is about to start"], timer: ["Timer", "Time's up"],
-    bt: ["Bluetooth", "Earbuds connect, with their battery"], wifi: ["Wi-Fi", "Connected / disconnected"], caps: ["Caps Lock", "On / off"],
+    bt: ["Bluetooth", "Earbuds connect, with their battery"], wifi: ["Wi-Fi", "Connected / disconnected"],
+    privacy: ["Microphone / camera", "An app starts using them (then just the dot)"],
     focus: ["Focus", "Windows focus starts or ends"], sports: ["Goals", "Your teams score"], rain: ["Rain", "Rain about to start"],
     reminder: ["Reminders", "Yours, and Jumu'ah"], clip: ["Clip saved", "After F8"], update: ["Updates", "A new Hop"], upload: ["Uploads", "Link copied"],
     game: ["After a game", "How many pop-ups waited"],
   };
   const SOUNDS = [["none", "No sound"], ["tick", "Tick"], ["pop", "Pop"], ["chime", "Chime"], ["bell", "Bell"]];
-  const LIVE_NAMES = { rec: "Recording", prayer: "Prayer countdown, iftar / suhoor", timer: "Timer", agent: "An agent needs you", focus: "Focus", mic: "Microphone in use" };
+  const LIVE_NAMES = { rec: "Recording", prayer: "Prayer countdown, iftar / suhoor", timer: "Timer", agent: "An agent needs you", focus: "Focus" };
   const LEAGUES = [["epl", "Premier League"], ["laliga", "La Liga"], ["ucl", "Champions League"], ["mls", "MLS"], ["nba", "NBA"], ["nfl", "NFL"], ["nhl", "NHL"], ["mlb", "MLB"]];
 
   // where each new section goes: [id, title, after-section-id, rows]
   const SECTIONS = [
-    ["s-shape", "Shape & size", "s-style", [
+    ["s-boards", "Pages & widgets", "s-style", [
+      R.seg("pageMode", "When it opens", "Widgets: a few things per page, side by side. Classic: one thing per page.",
+            [["boards", "Widget pages"], ["pages", "Classic pages"]]),
+      R.html(`<div id="boardsEd"></div>`),
+    ]],
+    ["s-shape", "Shape & size", "s-boards", [
       R.range("pillW", "Pill width", "Closed, pill style", 96, 280),
       R.range("pillH", "Pill height", "", 26, 52),
       R.range("notchW", "Notch width", "Closed, notch style", 140, 340),
       R.range("notchH", "Notch height", "", 22, 48),
-      R.range("openW", "Open width", "When it opens", 320, 460),
-      R.range("openH", "Open height", "", 140, 210),
+      R.range("openW", "Open width", "When it opens", 320, 760),
+      R.range("openH", "Open height", "", 140, 340),
       R.range("radiusClosed", "Corners, closed", "", 0, 26, 1, "px", true),
       R.range("radiusOpen", "Corners, open", "", 0, 56, 1, "px", true),
       R.range("topGap", "Gap from the top", "Notch: 0, pill: 10", 0, 80, 1, "px", true),
@@ -124,7 +130,6 @@
     ]],
     ["s-todaymore", "Today: more", "s-today", [
       R.sw("rainAlert", "Rain alert", "A pop-up when rain is about to start where you are"),
-      R.sw("capsPop", "Caps Lock", "Shows on the pill when you switch it"),
       R.sw("wifiPop", "Wi-Fi", "Shows on the pill when it connects or drops"),
       R.html(`<div id="countdowns"></div><div id="reminders"></div>`),
     ]],
@@ -182,8 +187,18 @@
   }
   // the table of contents and the search follow the new sections
   const toc = $("toc");
+  // the live preview: the island's real window size, scaled to fit the stage
+  function fitPreview(L) {
+    const f = $("pv"), stage = f && f.parentElement;
+    if (!stage) return;
+    const glow = L.glow ? 24 : 0;
+    const w = Math.max(L.openW, L.style === "notch" ? L.notchW : L.pillW) + glow, h = L.openH + 46 + glow / 2;
+    const k = Math.min(1.2, (stage.clientWidth - 16) / w, (stage.clientHeight - 20) / h);
+    Object.assign(f.style, { width: w + "px", height: h + "px", transform: `translateX(-50%) scale(${k.toFixed(3)})` });
+  }
+  window.addEventListener("resize", () => S.L && fitPreview(S.L));
   function buildToc() {
-    toc.innerHTML = [...panel.querySelectorAll("section")].map((s) => `<a href="#${s.id}">${esc(s.querySelector("h2").textContent)}</a>`).join("");
+    toc.innerHTML = [...panel.querySelectorAll("section")].filter((s) => !s.hidden).map((s) => `<a href="#${s.id}">${esc(s.querySelector("h2").textContent)}</a>`).join("");
   }
   buildToc();
   const SP = S.SECTION_PAGE;
@@ -254,8 +269,83 @@
     dim("idleAfter", L.idleHide); dim("idleStyle", L.idleHide); dim("quietFrom", L.quiet); dim("jumuahMins", L.jumuah);
     dim("monitorIndex", L.monitor === "fixed");
     if (document.activeElement !== $("customCss")) $("customCss").value = L.customCss || "";
-    renderPrio(L); renderPopTable(L); renderLists(L); renderAlarmChips(L); renderExtensions(L);
+    renderPrio(L); renderPopTable(L); renderLists(L); renderAlarmChips(L); renderExtensions(L); renderBoards(L);
+    fitPreview(L);
+    buildToc();
   }
+
+  // ---------------------------------------------------------------- widget pages (boards)
+  const SIZE_NAMES = { s: "Small", w: "Wide", t: "Tall", b: "Big", f: "Full width" };
+  const CELLS = { s: [1, 1], w: [2, 1], t: [1, 2], b: [2, 2], f: [4, 1] };
+  const WIDGET_SIZES = {
+    music: ["b", "w", "f"], today: ["w", "b", "s"], clips: ["w", "b", "f"], pc: ["w", "f", "b"], agents: ["b", "w", "t", "f"],
+    timer: ["w", "s", "b"], calendar: ["b", "w", "t"], alerts: ["b", "t", "w"], shelf: ["w", "b", "f"], notes: ["b", "w", "t"],
+    sports: ["w", "b"], prompter: ["b", "f", "w"], battery: ["w", "s", "b"],
+  };
+  const WNAME = { music: "Now playing", today: "Today: date, weather, prayers", clips: "Recent clips", pc: "PC: CPU, GPU, RAM, ping",
+                  agents: "AI agents", timer: "Timer", calendar: "Calendar", alerts: "Notifications", shelf: "Shelf", notes: "Notes",
+                  sports: "Scores", prompter: "Teleprompter", battery: "Battery" };
+  const WCOLOR = { music: "#ff375f", today: "#ffd479", clips: "#0a84ff", pc: "#30d158", agents: "#d97757", timer: "#ff9f0a",
+                   calendar: "#ff453a", alerts: "#5e5ce6", shelf: "#64d2ff", notes: "#ffd60a", sports: "#32d74b", prompter: "#bf5af2", battery: "#30d158" };
+  const allWidgets = () => [...Object.keys(WIDGET_SIZES), ...((extra && extra.extensions) || []).map((x) => "ext-" + x.id)];
+  const sizesOf = (w) => WIDGET_SIZES[w] || ["b", "w", "f", "s"];
+  const wname = (w) => WNAME[w] || (((extra && extra.extensions) || []).find((x) => "ext-" + x.id === w) || {}).name || w;
+  const used = (b) => b.widgets.reduce((n, x) => n + CELLS[x.s][0] * CELLS[x.s][1], 0);
+  function renderBoards(L) {
+    const box = $("boardsEd");
+    if (!box) return;
+    box.hidden = L.pageMode !== "boards";
+    const classic = $("s-pages");
+    if (classic) classic.hidden = L.pageMode === "boards";
+    if (box.hidden) return;
+    if (box.contains(document.activeElement) && document.activeElement.tagName === "INPUT") return;   // typing a name
+    const B = L.boards || [];
+    box.innerHTML = B.map((b, i) => {
+      const free = 8 - used(b);
+      const addable = allWidgets().filter((w) => !b.widgets.some((x) => x.w === w) && sizesOf(w).some((z) => CELLS[z][0] * CELLS[z][1] <= free));
+      return `<div class="board" data-b="${i}">
+        <div class="item bhead"><input class="field bname" data-bn="${i}" value="${esc(b.name)}" maxlength="20" placeholder="Page name">
+          <span class="hint">${free} of 8 free</span>
+          <button class="mv" data-bm="-1" data-b="${i}" ${i === 0 ? "disabled" : ""} title="Move page up">▲</button>
+          <button class="mv" data-bm="1" data-b="${i}" ${i === B.length - 1 ? "disabled" : ""} title="Move page down">▼</button>
+          <button class="btn warn" data-bdel="${i}" ${B.length < 2 ? "disabled" : ""} title="Delete page">Delete</button></div>
+        <div class="bmap">${b.widgets.map((x) => `<i class="m-${x.s}" style="--c:${WCOLOR[x.w] || "#8e8e93"}">${esc(wname(x.w).split(":")[0])}</i>`).join("")}</div>
+        ${b.widgets.map((x, j) => `<div class="item wrow"><span class="wdot" style="background:${WCOLOR[x.w] || "#8e8e93"}"></span>
+          <div class="label"><b>${esc(wname(x.w))}</b></div>
+          <div class="seg">${sizesOf(x.w).map((z) => `<button data-ws="${z}" data-b="${i}" data-j="${j}" class="${z === x.s ? "on" : ""}" title="${CELLS[z][0]}×${CELLS[z][1]} cells">${SIZE_NAMES[z]}</button>`).join("")}</div>
+          <button class="mv" data-wm="-1" data-b="${i}" data-j="${j}" ${j === 0 ? "disabled" : ""}>▲</button>
+          <button class="mv" data-wm="1" data-b="${i}" data-j="${j}" ${j === b.widgets.length - 1 ? "disabled" : ""}>▼</button>
+          <button class="btn warn" data-wdel="${i}" data-j="${j}" title="Remove from this page">×</button></div>`).join("")}
+        ${addable.length ? `<div class="item"><select class="field" data-wadd="${i}"><option value="">Add a widget…</option>${addable.map((w) => `<option value="${w}">${esc(wname(w))}</option>`).join("")}</select></div>` : ""}
+      </div>`;
+    }).join("") + (B.length < 6 ? `<div class="item"><button class="btn primary" id="boardAdd">Add a page</button><span class="hint">Up to 6 pages, 8 cells each (4 across, 2 down)</span></div>` : "");
+  }
+  const setBoards = (fn) => { const B = structuredClone(S.L.boards); fn(B); S.change({ boards: B }); };
+  panel.addEventListener("click", (e) => {
+    const t = e.target.closest("button"); if (!t || !t.closest("#boardsEd")) return;
+    const i = +t.dataset.b, j = +t.dataset.j;
+    if (t.id === "boardAdd") setBoards((B) => B.push({ name: `Page ${B.length + 1}`, widgets: [{ w: "notes", s: "b" }] }));
+    else if (t.dataset.bm) setBoards((B) => { const [x] = B.splice(i, 1); B.splice(i + +t.dataset.bm, 0, x); });
+    else if (t.dataset.bdel != null) setBoards((B) => B.splice(+t.dataset.bdel, 1));
+    else if (t.dataset.ws) setBoards((B) => {
+      const b = B[i], old = b.widgets[j].s;
+      b.widgets[j].s = t.dataset.ws;
+      if (used(b) > 8) { b.widgets[j].s = old; S.status("No room for that size on this page"); }
+    });
+    else if (t.dataset.wm) setBoards((B) => { const ws = B[i].widgets; const [x] = ws.splice(j, 1); ws.splice(j + +t.dataset.wm, 0, x); });
+    else if (t.dataset.wdel != null) setBoards((B) => { B[+t.dataset.wdel].widgets.splice(j, 1); if (!B[+t.dataset.wdel].widgets.length) B.splice(+t.dataset.wdel, 1); });
+  });
+  panel.addEventListener("change", (e) => {
+    const t = e.target;
+    if (t.dataset.wadd != null && t.value) {
+      e.stopPropagation();
+      const i = +t.dataset.wadd, w = t.value;
+      setBoards((B) => { const free = 8 - used(B[i]); B[i].widgets.push({ w, s: sizesOf(w).find((z) => CELLS[z][0] * CELLS[z][1] <= free) }); });
+    } else if (t.dataset.bn != null) {
+      e.stopPropagation();
+      setBoards((B) => { B[+t.dataset.bn].name = t.value.trim() || `Page ${+t.dataset.bn + 1}`; });
+    }
+  }, true);
 
   // ---------------------------------------------------------------- priority order (drag)
   function renderPrio(L) {
@@ -439,6 +529,18 @@
     .field.tm { flex: 0 0 auto; max-width: 120px; }
     .field.mini-sel { flex: 0 0 auto; max-width: 118px; padding: 5px 8px; font-size: 12.5px; }
     #popTable .item .label span { font-size: 12px; }
-    .item input[type=range]:disabled { opacity: 0.35; }`;
+    .item input[type=range]:disabled { opacity: 0.35; }
+    .board { border-top: 1px solid var(--line); }
+    .board:first-child { border-top: 0; }
+    .board .bhead .bname { max-width: 220px; font-weight: 600; }
+    .board .wrow { padding-left: 22px; }
+    .board .wdot { width: 9px; height: 9px; border-radius: 3px; flex: none; }
+    .bmap { display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(2, 34px); grid-auto-flow: dense; gap: 4px;
+      margin: 2px 14px 8px; padding: 6px; border-radius: 12px; background: #000; }
+    .bmap i { font-style: normal; font-size: 11px; font-weight: 600; color: #fff; border-radius: 7px; display: grid; place-items: center;
+      background: color-mix(in srgb, var(--c) 34%, #1c1c1e); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 55%, transparent);
+      overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding: 0 6px; }
+    .bmap .m-s { grid-column: span 1; } .bmap .m-w { grid-column: span 2; } .bmap .m-t { grid-row: span 2; }
+    .bmap .m-b { grid-column: span 2; grid-row: span 2; } .bmap .m-f { grid-column: span 4; }`;
   document.head.appendChild(style);
 })();

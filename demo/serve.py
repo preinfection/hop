@@ -33,6 +33,7 @@ def demo_layout():
               "prayerChime", "marquee", "artColor"):
         L[k] = True
     L.update(options.DEFAULTS)
+    L["hidden"] = []
     L.update({"countdowns": [{"name": "Hop 0.2", "date": "2026-12-01"}],
               "reminders": [{"text": "Stretch", "every": 45, "from": "09:00", "to": "22:00", "on": True}],
               "teams": [{"league": "epl", "team": "Arsenal"}], "extensions": ["world-clock"]})
@@ -84,7 +85,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 class Server(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
-    allow_reuse_address = True
+    allow_reuse_address = False      # on Windows, True lets a second server share the port silently
 
 
 if __name__ == "__main__":

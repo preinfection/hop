@@ -13,10 +13,28 @@ import re
 NEW_PAGES = ["agents", "timer", "calendar", "alerts", "shelf", "notes", "sports", "prompter", "battery"]
 
 SLOTS = ("art", "clock", "bars", "timer", "agents", "net", "battery", "weather", "date", "rec", "none")
-POPUPS = ("notif", "agent", "download", "snip", "calendar", "timer", "bt", "wifi", "caps", "focus",
+POPUPS = ("notif", "agent", "download", "snip", "calendar", "timer", "bt", "wifi", "privacy", "focus",
           "sports", "rain", "reminder", "clip", "update", "upload", "game")
 POPUP_SOUNDS = ("none", "tick", "pop", "chime", "bell")
-LIVE = ("rec", "prayer", "timer", "agent", "focus", "mic")      # what may take over the closed pill
+LIVE = ("rec", "prayer", "timer", "agent", "focus")             # what may take over the closed pill
+
+# BOARDS: the open island shows a few pages, each a grid of widgets (4 columns
+# x 2 rows). A widget is one of the page kinds; its size is how many cells
+# it covers: s 1x1, w 2x1, t 1x2, b 2x2, f 4x1. Each kind allows the sizes
+# its content is drawn for.
+SIZES = {"s": (1, 1), "w": (2, 1), "t": (1, 2), "b": (2, 2), "f": (4, 1)}
+WIDGETS = {
+    "music": ("b", "w", "f"), "today": ("w", "b", "s"), "clips": ("w", "b", "f"), "pc": ("w", "f", "b"),
+    "agents": ("b", "w", "t", "f"), "timer": ("w", "s", "b"), "calendar": ("b", "w", "t"), "alerts": ("b", "t", "w"),
+    "shelf": ("w", "b", "f"), "notes": ("b", "w", "t"), "sports": ("w", "b"), "prompter": ("b", "f", "w"),
+    "battery": ("w", "s", "b"),
+}
+EXT_SIZES = ("b", "w", "f", "s")
+DEFAULT_BOARDS = [
+    {"name": "Now", "widgets": [{"w": "music", "s": "b"}, {"w": "today", "s": "w"}, {"w": "timer", "s": "w"}]},
+    {"name": "Work", "widgets": [{"w": "agents", "s": "b"}, {"w": "calendar", "s": "b"}]},
+    {"name": "Stuff", "widgets": [{"w": "clips", "s": "w"}, {"w": "alerts", "s": "b"}, {"w": "pc", "s": "w"}]},
+]
 PRAYERS = ("Fajr", "Dhuhr", "Asr", "Maghrib", "Isha")
 
 HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
@@ -41,7 +59,10 @@ SPEC = {
     # ---- shape (-1 = the style's own value)
     "pillW": _int(126, 96, 280), "pillH": _int(37, 26, 52),
     "notchW": _int(200, 140, 340), "notchH": _int(32, 22, 48),
-    "openW": _int(360, 320, 460), "openH": _int(150, 140, 210),
+    "openW": _int(540, 320, 760), "openH": _int(220, 140, 340),
+    # the open island: widget pages (boards), or the classic one-thing pages
+    "pageMode": _enum("boards", "boards", "pages"),
+    "boards": ("boards", None),
     "radiusClosed": _int(-1, -1, 26), "radiusOpen": _int(-1, -1, 56),
     "topGap": _int(-1, -1, 80),
     # ---- colour
@@ -87,7 +108,7 @@ SPEC = {
     # ---- Today page extras
     "rainAlert": _bool(True), "countdowns": ("countdowns", []),
     "reminders": ("reminders", []),
-    "capsPop": _bool(True), "wifiPop": _bool(True),
+    "wifiPop": _bool(True),
     # ---- AI agents
     "agentsOn": _bool(True), "agentSound": _bool(True), "agentSuppress": _bool(True),
     "agentApprove": _bool(True), "usagePill": _bool(False),
@@ -107,7 +128,7 @@ POPUP_DEFAULTS = {k: dict(POPUP_DEFAULT) for k in POPUPS}
 POPUP_DEFAULTS["agent"]["sound"] = "pop"
 POPUP_DEFAULTS["timer"].update(ms=12000, sound="chime")
 POPUP_DEFAULTS["calendar"].update(ms=10000, sound="tick")
-POPUP_DEFAULTS["caps"]["ms"] = 1500
+POPUP_DEFAULTS["privacy"]["ms"] = 3000             # "Discord is using your microphone", then just the dot
 POPUP_DEFAULTS["clip"]["ms"] = 7000
 POPUP_DEFAULTS["update"]["ms"] = 0                     # 0 = stays until answered
 POPUP_DEFAULTS["game"]["on"] = False
@@ -117,6 +138,8 @@ def default(key):
     spec = SPEC[key]
     if spec[0] == "popups":
         return {k: dict(v) for k, v in POPUP_DEFAULTS.items()}
+    if spec[0] == "boards":
+        return [{"name": b["name"], "widgets": [dict(w) for w in b["widgets"]]} for b in DEFAULT_BOARDS]
     v = spec[1]
     return list(v) if isinstance(v, list) else v
 
@@ -175,6 +198,30 @@ def _clean_one(spec, v):
                     if p.get("sound") in POPUP_SOUNDS:
                         out[k]["sound"] = p["sound"]
         return out
+    if kind == "boards":
+        if not isinstance(v, list):
+            return None
+        out = []
+        for b in v[:6]:
+            if not isinstance(b, dict) or not isinstance(b.get("widgets"), list):
+                continue
+            seen, ws, cells = set(), [], 0
+            for w in b["widgets"]:
+                if not isinstance(w, dict):
+                    continue
+                kind_, size = w.get("w"), w.get("s")
+                ok = WIDGETS.get(kind_) or (EXT_SIZES if isinstance(kind_, str) and re.fullmatch(r"ext-[\w-]{1,40}", kind_) else None)
+                if not ok or kind_ in seen:
+                    continue                                  # unknown, or already on this page
+                size = size if size in ok else ok[0]
+                if cells + SIZES[size][0] * SIZES[size][1] > 8:
+                    continue                                  # the page is full (4 x 2 cells)
+                cells += SIZES[size][0] * SIZES[size][1]
+                seen.add(kind_)
+                ws.append({"w": kind_, "s": size})
+            if ws:
+                out.append({"name": (str(b.get("name") or "Page").strip() or "Page")[:20], "widgets": ws})
+        return out or None
     if kind == "countdowns":
         if not isinstance(v, list):
             return None
