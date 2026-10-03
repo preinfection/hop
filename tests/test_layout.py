@@ -6,24 +6,26 @@ import pytest
 
 import host
 
-PAGES = host.PAGE_IDS
+PAGES = host.CORE_PAGES          # the exhaustive tests run over the four original pages
+NEW = host.options.NEW_PAGES      # pages added later start hidden
 
 
 # ---- every order of the four pages (24)
 @pytest.mark.parametrize("order", list(itertools.permutations(PAGES)))
 def test_page_order_kept(order):
     L = host.clean_layout({"pages": list(order)})
-    assert L["pages"] == list(order)
+    assert L["pages"] == list(order) + NEW
 
 
 # ---- every set of hidden pages (16): at least one page always stays
 @pytest.mark.parametrize("hidden", [list(c) for n in range(5) for c in itertools.combinations(PAGES, n)])
 def test_hidden_pages(hidden):
     L = host.clean_layout({"hidden": hidden})
-    assert len(L["hidden"]) < len(PAGES)
-    assert set(L["hidden"]) <= set(hidden)
+    core = [p for p in L["hidden"] if p in PAGES]
+    assert set(core) <= set(hidden)
+    assert set(NEW) <= set(L["hidden"])            # never listed before: hidden
     if len(hidden) < len(PAGES):
-        assert L["hidden"] == list(dict.fromkeys(hidden))
+        assert core == list(dict.fromkeys(hidden))
     else:
         assert "music" not in L["hidden"]          # all four hidden: the player comes back
 
@@ -33,7 +35,7 @@ def test_hidden_pages(hidden):
 @pytest.mark.parametrize("hidden", [list(c) for n in range(5) for c in itertools.combinations(PAGES, n)])
 def test_order_and_hidden(order, hidden):
     L = host.clean_layout({"pages": list(order), "hidden": hidden})
-    assert L["pages"] == list(order)
+    assert L["pages"] == list(order) + NEW
     visible = [p for p in L["pages"] if p not in L["hidden"]]
     assert len(visible) >= 1
 
@@ -43,8 +45,8 @@ def test_order_and_hidden(order, hidden):
                                    ["music", "music", "music"], [1, 2, None], ["clips", "PC", "Music"]])
 def test_page_list_completed(pages):
     L = host.clean_layout({"pages": pages})
-    assert sorted(L["pages"]) == sorted(PAGES)
-    assert len(L["pages"]) == 4
+    assert sorted(L["pages"]) == sorted(host.PAGE_IDS)
+    assert len(L["pages"]) == len(host.PAGE_IDS)
 
 
 # ---- slot choices
@@ -107,7 +109,12 @@ def test_empty_or_junk(raw):
 
 
 def test_old_pages34_off_hides_pages_3_and_4():
-    assert host.clean_layout(None, legacy_pages34=False)["hidden"] == ["clips", "pc"]
+    assert host.clean_layout(None, legacy_pages34=False)["hidden"] == ["clips", "pc"] + NEW
+
+
+def test_new_page_listed_by_the_user_is_kept():
+    L = host.clean_layout({"pages": PAGES + ["timer"], "hidden": []})
+    assert "timer" not in L["hidden"] and "agents" in L["hidden"]
 
 
 def test_unknown_keys_dropped():

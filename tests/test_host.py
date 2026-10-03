@@ -28,7 +28,7 @@ def test_broken_config_gives_defaults(raw):
 
 def test_layout_saved_and_read(island):
     L = island.set_layout({"musicLeft": "art", "hidden": ["pc"], "scale": 1.2})
-    assert L["musicLeft"] == "art" and L["hidden"] == ["pc"] and L["scale"] == 1.2
+    assert L["musicLeft"] == "art" and L["hidden"] == ["pc"] + host.options.NEW_PAGES and L["scale"] == 1.2
     assert host.read_config()["layout"]["musicLeft"] == "art"
     assert host.Island().layout["musicLeft"] == "art"          # a restart keeps it
 
