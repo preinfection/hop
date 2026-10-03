@@ -603,8 +603,11 @@ class Island:
         clips = extras.recent_clips(3)
         for c in clips:
             c["url"] = "https://clips.island/" + urllib.parse.quote(c["name"])
-            t = extras.thumb(c["path"])
-            c["thumb"] = "https://thumbs.island/" + t if t else ""
+            # The picture goes to the page as data, not as a thumbs.island link:
+            # that private host name only works once WebView2 has mapped it,
+            # and after a cold boot it sometimes never was (2026-10-03: every
+            # old clip's picture stayed broken until a restart).
+            c["thumb"] = extras.thumb_data(c["path"]) or ""
         return clips
 
     def open_clips_folder(self):
@@ -1758,7 +1761,10 @@ def main():
             # (WebView2 virtual host; nothing is copied).
             # (CoreWebView2 exists only once the engine has started: retried.)
             def map_clips():
-                for _ in range(60):
+                # Retried until it works (at first every 0.5 s, then every 5 s):
+                # giving up after 30 s once left a cold-booted island with no
+                # clip videos and no thumbnails for the whole session.
+                for n in range(100000):
                     done = []
 
                     def attempt():
@@ -1778,9 +1784,11 @@ def main():
                         dbg("clips mapping", repr(e))
                     if done:
                         dbg("clips mapped")
+                        extras.log(f"clips and thumbs mapped after {n + 1} tries")
                         return
-                    time.sleep(0.5)
-            threading.Thread(target=map_clips, daemon=True).start()
+                    time.sleep(0.5 if n < 60 else 5)
+            island.map_hosts = lambda: threading.Thread(target=map_clips, daemon=True).start()
+            island.map_hosts()
             try:
                 form.update_title_bar_theme = no_backdrop
             except Exception:
@@ -1932,6 +1940,8 @@ class IslandApi:
 
     def log(self, msg):
         dbg("page:", str(msg)[:300])
+        if "error" in str(msg):
+            extras.log("page:", str(msg)[:300])
         return True
 
     def open_settings(self):
@@ -1947,6 +1957,13 @@ class IslandApi:
 
     def swiped(self):
         return self._i.swiped()
+
+    def remap_hosts(self):
+        """The page could not load a clips.island video: map the folders again."""
+        f = getattr(self._i, "map_hosts", None)
+        if f:
+            f()
+        return True
 
 
 class SettingsApi(IslandApi):

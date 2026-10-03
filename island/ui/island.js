@@ -469,7 +469,13 @@
       312, 100, 7000, () => {
         const v = card.querySelector("video");
         v.addEventListener("loadeddata", () => api.log(`clip video loaded ${v.videoWidth}x${v.videoHeight}`));
-        v.addEventListener("error", () => api.log(`clip video error ${v.error && v.error.code} ${v.error && v.error.message} src=${v.currentSrc} page=${location.href}`));
+        let again = false;
+        v.addEventListener("error", () => {
+          api.log(`clip video error ${v.error && v.error.code} ${v.error && v.error.message} src=${v.currentSrc} page=${location.href}`);
+          if (again) return;                       // clips.island not mapped (yet): map it and try once more
+          again = true;
+          Promise.resolve(api.remapHosts()).then(() => setTimeout(() => { v.src = c.url + "?r=" + Date.now(); }, 800));
+        });
         $("cOpen").onclick = () => { api.openFile(c.path); hideCard(); };
         $("cCopy").onclick = (e) => { api.copyFile(c.path); e.target.classList.add("ok"); e.target.textContent = "Copied ✓"; fitCard(); armCard(2500); };
       });

@@ -337,6 +337,36 @@ def thumb(path):
     return key if os.path.exists(out) else None
 
 
+def thumb_data(path):
+    """The clip's picture as a data: URL (a 320 px JPEG is 4-15 KB), so the
+    page needs no private host name to show it."""
+    import base64
+    key = thumb(path)
+    if not key:
+        return None
+    try:
+        with open(os.path.join(THUMBS, key), "rb") as fh:
+            return "data:image/jpeg;base64," + base64.b64encode(fh.read()).decode("ascii")
+    except OSError:
+        return None
+
+
+LOG = os.path.join(os.environ.get("LOCALAPPDATA", DIR), "Hop Island", "island.log")
+
+
+def log(*parts):
+    r"""One line in %LOCALAPPDATA%\Hop Island\island.log (kept under 256 KB),
+    so problems after a reboot can be read afterwards."""
+    try:
+        os.makedirs(os.path.dirname(LOG), exist_ok=True)
+        if os.path.exists(LOG) and os.path.getsize(LOG) > 262144:
+            os.replace(LOG, LOG + ".old")
+        with open(LOG, "a", encoding="utf-8") as fh:
+            fh.write(time.strftime("%Y-%m-%d %H:%M:%S ") + " ".join(map(str, parts)) + "\n")
+    except OSError:
+        pass
+
+
 def recent_clips(n=3):
     """The newest clips / recordings: name, path, size, when, length (from the name)."""
     try:

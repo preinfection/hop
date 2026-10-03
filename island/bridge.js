@@ -88,6 +88,7 @@
     restartApp: () => call("restart_app"),
     updateAnswer: (go) => call("update_answer", go),
     swiped: () => call("swiped"),
+    remapHosts: () => call("remap_hosts"),
     onState: (callback) => listeners.push(callback)
   };
 

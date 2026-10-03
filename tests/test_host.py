@@ -179,8 +179,10 @@ def test_recent_clips_and_thumbnails(island, sandbox):
     clips = island.get_clips()
     assert [c["seconds"] for c in clips] == [30, 15]               # newest first, length from the name
     for c in clips:
-        assert c["url"].startswith("https://clips.island/") and c["thumb"].startswith("https://thumbs.island/")
-        assert os.path.getsize(os.path.join(extras.THUMBS, c["thumb"].rsplit("/", 1)[1])) > 1000
+        # the picture travels as data: it shows even if thumbs.island was never mapped (a cold boot)
+        assert c["url"].startswith("https://clips.island/") and c["thumb"].startswith("data:image/jpeg;base64,")
+        assert len(c["thumb"]) > 1300
+    assert len(os.listdir(extras.THUMBS)) >= 2                    # still cached on disk, made once
 
 
 # ================================================================ drop to upload: the real anonymous host
