@@ -1,0 +1,28 @@
+<!doctype html>
+<!-- A Hop Island extension. Change TARGET and NAME, save, and press the
+     island's refresh button. -->
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; color: #fff; font: 600 13px/1.3 "Segoe UI Variable Text", system-ui, sans-serif; overflow: hidden; }
+  body { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .big { font-size: 44px; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1; }
+  .sub { margin-top: 6px; color: rgba(235,235,245,.6); font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="big" id="big"></div>
+<div class="sub" id="sub"></div>
+<script>
+  const TARGET = "2027-01-01", NAME = "New Year";
+  function draw() {
+    const days = Math.ceil((new Date(TARGET + "T00:00:00") - new Date()) / 86400000);
+    document.getElementById("big").textContent = Math.max(0, days);
+    document.getElementById("sub").textContent = days > 0 ? `days until ${NAME}` : `${NAME} is here`;
+  }
+  draw();
+  setInterval(draw, 60000);
+</script>
+</body>
+</html>

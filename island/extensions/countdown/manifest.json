@@ -1,0 +1,6 @@
+{
+  "name": "Big countdown",
+  "description": "Days left until a date (edit the date at the top of page.html)",
+  "page": "page.html",
+  "version": "1.0"
+}
