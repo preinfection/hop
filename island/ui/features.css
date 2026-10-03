@@ -1,0 +1,262 @@
+/* The newer half of the island (features.js): your own look (colours, shape,
+   motion, font), the three slots of the closed pill, idle mode, the privacy
+   dot, and the pages and cards added in 0.1.3. Everything here reads CSS
+   variables that features.js sets from the settings, so the defaults look
+   exactly like the island before. */
+
+:root {
+  --isl-bg: #000;
+  --isl-font: "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --r-closed: 19px;
+  --r-open: 40px;
+  --dur: 420ms;
+  --ease-w: cubic-bezier(0.32, 1.18, 0.55, 1);   /* width: a little spring */
+  --ease-h: cubic-bezier(0.22, 1, 0.36, 1);      /* height: no overshoot, so the bottom edge never wobbles */
+  --isl-ring: 0 0 0 0 transparent;
+  --isl-glow: 0 0 0 0 transparent;
+  --hop-orange: #ff9f0a;
+  --hop-amber: #ffd479;
+  --hop-green: #30d158;
+  --hop-red: #ff453a;
+  --hop-blue: #0a84ff;
+  --hop-purple: #bf5af2;
+  --dim: rgba(235, 235, 245, 0.6);
+  --faint: rgba(235, 235, 245, 0.35);
+  --tile: rgba(255, 255, 255, 0.08);
+  --tile-hover: rgba(255, 255, 255, 0.14);
+}
+
+/* ---- the shape and colour, from the settings */
+.island {
+  background: var(--isl-bg);
+  border-radius: var(--r-closed);
+  font-family: var(--isl-font);
+  box-shadow: var(--isl-ring), var(--isl-glow);
+  /* SMOOTH OPEN: the island's own layout is kept to itself, and the height
+     eases without a spring (the old spring made the bottom edge wobble for
+     ~0.4 s after the hover delay, which read as a slow, visible resize) */
+  contain: layout paint style;
+  transition:
+    width var(--dur) var(--ease-w),
+    height calc(var(--dur) * 0.85) var(--ease-h),
+    border-radius var(--dur) var(--ease-h),
+    transform calc(var(--dur) * 1.1) var(--ease-w),
+    opacity 300ms ease;
+}
+.island.open { border-radius: var(--r-open); }
+.island.carding, .island.carding.open { border-radius: min(34px, var(--r-open)); }
+/* A CARD'S SIZE ALWAYS WINS. The prayer countdown's wider pill
+   (.pray-show:not(.open)) outranked .carding, so a card that arrived during
+   the countdown was squeezed to the pill's width and cut on both sides. */
+.island.carding { width: var(--card-w, 312px) !important; height: var(--card-h, 100px) !important; }
+.notch .island { border-radius: 0 0 var(--r-closed) var(--r-closed); }
+.notch .island.open, .notch .island.open.vol, .notch .island.carding, .notch .island.carding.open {
+  border-radius: 0 0 var(--r-open) var(--r-open);
+}
+html.motion-reduced .island { transition: width 160ms ease, height 160ms ease, border-radius 160ms ease, opacity 200ms ease; }
+html.motion-reduced .pg, html.motion-reduced .full, html.motion-reduced .card { transition-duration: 120ms !important; transform: none !important; }
+html.motion-reduced .bars i, html.motion-reduced .rec-dot, html.motion-reduced .rec-ring { animation: none !important; }
+
+/* ---- the closed pill: three slots (left, centre, right) */
+.mini { padding: 0 11px 0 8px; }
+.mini .slot { display: flex; align-items: center; min-width: 0; }
+.mini .sl-c { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; }
+.mini .sl-l { margin-right: auto; }
+.mini .sl-r { margin-left: auto; }
+.mini .slot .clock { position: static; transform: none; }
+.mini .slot:empty { display: none; }
+.sv {
+  font-family: "Inter Island", "Segoe UI Variable Display", system-ui, sans-serif;
+  font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap;
+  color: rgba(255, 255, 255, 0.92); display: inline-flex; align-items: center; gap: 4px;
+}
+.sv .u { font-weight: 500; color: var(--dim); font-size: 10.5px; }
+.sv-timer { color: var(--hop-orange); }
+.sv-agents i { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); display: block; }
+.sv-agents i.work { background: var(--hop-blue); animation: ag-blink 1.2s ease-in-out infinite; }
+.sv-agents i.ask { background: var(--hop-orange); animation: ag-blink 0.6s ease-in-out infinite; }
+.sv-agents i.done { background: var(--hop-green); }
+.sv-rec i { width: 7px; height: 7px; border-radius: 50%; background: var(--hop-red); display: block; }
+.island:not(.open) .sv-agents i { animation-play-state: running; }
+@keyframes ag-blink { 50% { opacity: 0.35; } }
+.recording .sl-c > *, .pray-show .sl-c > *, .live-on .sl-c > * { opacity: 0 !important; }
+
+/* a live thing that takes over the middle of the pill (settings: priority) */
+.live-text {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  font-family: "Inter Island", "Segoe UI Variable Display", system-ui, sans-serif;
+  font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap;
+  opacity: 0; pointer-events: none; transition: opacity 200ms ease; color: var(--live-c, #fff);
+}
+.live-on .live-text { opacity: 1; }
+.live-on .clock, .live-on .rec-time, .live-on .pray-time { opacity: 0 !important; }
+.live-pulse .live-text { animation: ag-blink 1s ease-in-out infinite; }
+
+/* the privacy dot: an app is using the microphone (orange) or camera (green) */
+.pdot {
+  position: absolute; top: 50%; right: 4px; width: 5px; height: 5px; margin-top: -2.5px; border-radius: 50%;
+  opacity: 0; transition: opacity 250ms ease, background 250ms ease; pointer-events: none;
+}
+.pdot.mic { background: var(--hop-orange); opacity: 1; }
+.pdot.cam { background: var(--hop-green); opacity: 1; }
+.open .pdot, .carding .pdot { opacity: 0 !important; }
+
+/* idle: nothing has happened for a while, the pill tucks away */
+.island.idle-line:not(.open):not(.carding):not(.act) { height: 5px; width: calc(var(--w) * 0.55); }
+.island.idle-line:not(.open):not(.carding):not(.act) > * { opacity: 0 !important; }
+.island.idle-fade:not(.open):not(.carding):not(.act) { opacity: 0.22; }
+/* game mode: just the pill, nothing animates */
+.island.gaming:not(.open) .bars i { animation: none !important; }
+
+/* ---- shuffle / repeat beside the play controls */
+.controls .sr { width: 28px; height: 28px; color: var(--faint); }
+.controls .sr svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.controls .sr.on { color: var(--accent); }
+.controls .sr .one { font-size: 8px; font-weight: 800; position: absolute; margin: 9px 0 0 9px; }
+.no-sr .controls .sr { display: none; }
+.controls { gap: 22px; }
+
+/* ================================================================ pages */
+.pg .ph { display: flex; justify-content: space-between; align-items: center; font-size: 13.5px; font-weight: 600; margin-bottom: 8px; }
+.pg .ph .sub { font-size: 11px; font-weight: 500; color: var(--dim); }
+.pg .lnk {
+  width: auto; height: 22px; padding: 0 9px; border-radius: 11px;
+  font-size: 11px; font-weight: 600; color: rgba(235, 235, 245, 0.78); background: rgba(255, 255, 255, 0.1);
+}
+.pg .lnk:hover { background: rgba(255, 255, 255, 0.18); color: #fff; }
+.pg .empty-note { font-size: 12px; color: var(--dim); line-height: 1.4; }
+.pg-x { padding: 14px 26px 12px 20px; justify-content: flex-start; }
+.rows { display: flex; flex-direction: column; gap: 5px; }
+.row {
+  display: flex; align-items: center; gap: 9px; min-height: 26px; padding: 3px 7px; border-radius: 9px;
+  background: var(--tile); font-size: 12px;
+}
+.row .grow { flex: 1; min-width: 0; }
+.row .t1 { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .t2 { color: var(--dim); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .tm { color: var(--dim); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.row.click { cursor: pointer; }
+.row.click:hover { background: var(--tile-hover); }
+.row button.mini-btn { width: auto; height: 22px; padding: 0 9px; border-radius: 11px; font-size: 11px; font-weight: 600; background: rgba(255, 255, 255, 0.14); }
+.row button.mini-btn.go { background: var(--hop-green); color: #002b0f; }
+
+/* agents */
+.mascot { width: 18px; height: 18px; border-radius: 6px; flex: none; display: grid; place-items: center; font-size: 10px; font-weight: 800; color: #000; }
+.mascot.work { animation: ag-bob 1.1s ease-in-out infinite; }
+.mascot.ask { animation: ag-blink 0.7s ease-in-out infinite; }
+.island:not(.open) .mascot { animation: none; }
+@keyframes ag-bob { 50% { transform: translateY(-2px); } }
+.ag-st { font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 6px; white-space: nowrap; }
+.ag-st.work { color: var(--hop-blue); background: rgba(10, 132, 255, 0.15); }
+.ag-st.ask { color: var(--hop-orange); background: rgba(255, 159, 10, 0.15); }
+.ag-st.done { color: var(--hop-green); background: rgba(48, 209, 88, 0.15); }
+.ag-st.idle { color: var(--dim); background: var(--tile); }
+.usage { display: flex; gap: 10px; margin-top: 7px; font-size: 10.5px; color: var(--dim); }
+.usage .bar { flex: 1; height: 4px; border-radius: 2px; background: var(--tile); overflow: hidden; margin-top: 3px; }
+.usage .bar i { display: block; height: 100%; background: var(--hop-blue); border-radius: 2px; }
+.usage .bar i.hot { background: var(--hop-orange); }
+
+/* timer */
+.pg-timer { padding: 12px 26px 12px 20px; justify-content: center; gap: 8px; align-items: center; }
+.tm-modes { display: inline-flex; gap: 2px; background: var(--tile); border-radius: 9px; padding: 2px; }
+.tm-modes button { width: auto; height: 22px; padding: 0 10px; border-radius: 7px; font-size: 11px; font-weight: 600; color: var(--dim); }
+.tm-modes button.on { background: rgba(255, 255, 255, 0.16); color: #fff; }
+.tm-big { font-family: "Inter Island", "Segoe UI Variable Display", system-ui, sans-serif; font-size: 34px; font-weight: 600;
+  letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1; cursor: ns-resize; }
+.tm-big.run { color: var(--hop-orange); }
+.tm-sub { font-size: 10.5px; color: var(--dim); margin-top: -2px; height: 13px; }
+.tm-row { display: flex; gap: 6px; align-items: center; }
+.tm-row .lnk { height: 24px; }
+.tm-row .go { background: var(--hop-orange); color: #2b1800; }
+.tm-row .go:hover { background: #ffb340; color: #2b1800; }
+
+/* shelf */
+.sh-items { display: flex; gap: 8px; flex-wrap: nowrap; overflow: hidden; }
+.sh { position: relative; width: 62px; flex: none; text-align: center; cursor: pointer; }
+.sh .ic { width: 46px; height: 46px; margin: 0 auto; border-radius: 11px; background: var(--tile); display: grid; place-items: center;
+  font-size: 10px; font-weight: 800; letter-spacing: 0.02em; color: var(--dim); overflow: hidden; }
+.sh .ic img { width: 100%; height: 100%; object-fit: cover; }
+.sh .nm { margin-top: 4px; font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--dim); }
+.sh:hover .ic { background: var(--tile-hover); }
+.sh .pin { position: absolute; top: -3px; left: 4px; font-size: 10px; }
+.sh .x { position: absolute; top: -5px; right: 2px; width: 18px; height: 18px; border-radius: 50%; background: #2c2c2e; opacity: 0; font-size: 11px; }
+.sh:hover .x { opacity: 1; }
+.sh-drop { border: 1.5px dashed rgba(255, 255, 255, 0.25); border-radius: 12px; padding: 12px; text-align: center; font-size: 12px; color: var(--dim); }
+
+/* notes */
+.notes {
+  all: unset; display: block; box-sizing: border-box; width: 100%; height: 92px; padding: 8px 10px; border-radius: 12px;
+  background: var(--tile); font: 12.5px/1.4 var(--isl-font); color: #fff; white-space: pre-wrap; overflow-y: auto; cursor: text; user-select: text;
+}
+.notes:focus { background: rgba(255, 255, 255, 0.11); }
+
+/* sports */
+.match { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 10px; background: var(--tile); }
+.match + .match { margin-top: 5px; }
+.match .tm-a { text-align: right; font-weight: 600; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.match .tm-b { font-weight: 600; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.match .sc { font-family: "Inter Island", system-ui, sans-serif; font-weight: 700; font-size: 15px; font-variant-numeric: tabular-nums; text-align: center; min-width: 46px; }
+.match .st { grid-column: 1 / -1; text-align: center; font-size: 10px; color: var(--dim); margin-top: -2px; }
+.match .st.live { color: var(--hop-red); font-weight: 700; }
+
+/* teleprompter */
+.pg-prompter { padding: 10px 26px 10px 20px; }
+.pr-view { position: relative; height: 96px; overflow: hidden; border-radius: 10px;
+  -webkit-mask-image: linear-gradient(transparent, #000 22%, #000 78%, transparent); mask-image: linear-gradient(transparent, #000 22%, #000 78%, transparent); }
+.pr-text { position: absolute; left: 0; right: 0; top: 0; font-size: 17px; font-weight: 600; line-height: 1.35; text-align: center; will-change: transform; white-space: pre-wrap; }
+.pr-bar { display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 6px; font-size: 10.5px; color: var(--dim); }
+
+/* battery */
+.bt-top { display: flex; align-items: center; gap: 14px; }
+.bt-big { font-family: "Inter Island", system-ui, sans-serif; font-size: 28px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.bt-meta { font-size: 11px; color: var(--dim); line-height: 1.45; }
+.bt-meta b { color: #fff; font-weight: 600; }
+.bt-cell { width: 38px; height: 18px; border: 2px solid rgba(255, 255, 255, 0.6); border-radius: 5px; padding: 2px; position: relative; flex: none; }
+.bt-cell::after { content: ""; position: absolute; right: -5px; top: 4px; width: 3px; height: 6px; border-radius: 0 2px 2px 0; background: rgba(255, 255, 255, 0.6); }
+.bt-cell i { display: block; height: 100%; border-radius: 2px; background: var(--hop-green); }
+.bt-cell i.low { background: var(--hop-red); }
+
+.bt-chips { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; overflow: hidden; font-size: 11px; }
+.bt-chips .lbl { color: var(--dim); white-space: nowrap; }
+.bt-chips .chip { padding: 3px 8px; border-radius: 8px; background: var(--tile); white-space: nowrap; }
+.bt-chips b { color: var(--hop-orange); font-weight: 600; }
+
+/* many pages: smaller dots, so the column stays inside the island */
+.pg-dots.many { gap: 3px; }
+.pg-dots.many i { width: 3px; height: 3px; }
+.pg-dots.many i.on { height: 9px; }
+
+/* extensions run in their own sandboxed frame */
+.pg-ext { padding: 0; }
+.pg-ext iframe { width: 100%; height: 100%; border: 0; background: transparent; color-scheme: normal; }
+
+/* ================================================================ cards */
+.card .ic-sq { width: 44px; height: 44px; border-radius: 12px; flex: none; display: grid; place-items: center; font-weight: 800; font-size: 16px; color: #000; overflow: hidden; }
+.card .ic-sq img { width: 100%; height: 100%; object-fit: cover; }
+.card .ic-sq svg { width: 24px; height: 24px; }
+.card .body { margin-top: 2px; font-size: 12.5px; color: rgba(235, 235, 245, 0.82); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-width: 230px; }
+.card .pbtn.go { background: #fff; color: #111; }
+.card .pbtn.ok2 { background: var(--hop-green); color: #002b0f; }
+.card .pbtn.no { background: rgba(255, 69, 58, 0.22); color: #ffb4ae; }
+.card .pbtn.warn { background: var(--hop-orange); color: #2b1800; }
+.card.tall { align-items: flex-start; padding-top: 16px; }
+.card .pbtn.ico { width: 30px; padding: 0; display: grid; place-items: center; }
+.card .pbtn.ico svg { width: 15px; height: 15px; }
+.card .plan { margin-top: 5px; max-height: 66px; overflow-y: auto; font-size: 11.5px; line-height: 1.4; color: rgba(235, 235, 245, 0.85);
+  background: var(--tile); border-radius: 9px; padding: 6px 9px; white-space: pre-wrap; user-select: text; }
+.card .diff { margin-top: 5px; max-height: 92px; overflow: auto; font: 10.5px/1.35 ui-monospace, "Cascadia Mono", Consolas, monospace; border-radius: 8px; background: var(--tile); padding: 5px 7px; white-space: pre; user-select: text; }
+.card .diff .a { color: #7ee2a8; } .card .diff .d { color: #ff9a92; }
+.card .choices { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.card .choices .pbtn { height: 26px; padding: 0 11px; font-size: 12px; }
+.card.tall .btns { margin-top: 6px; }
+.card .fb { all: unset; box-sizing: border-box; width: 100%; margin-top: 5px; padding: 4px 9px; border-radius: 8px; background: var(--tile); font-size: 12px; color: #fff; user-select: text; }
+.card .snip { width: 96px; height: 64px; border-radius: 11px; object-fit: cover; flex: none; background: #1c1c1e; }
+/* trimming a clip: two handles on the clip's timeline */
+.trim { margin-top: 8px; position: relative; height: 22px; }
+.trim .tr-rail { position: absolute; left: 0; right: 0; top: 9px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.2); }
+.trim .tr-sel { position: absolute; top: 9px; height: 4px; background: var(--hop-orange); border-radius: 2px; }
+.trim .tr-h { position: absolute; top: 3px; width: 10px; height: 16px; margin-left: -5px; border-radius: 4px; background: #fff; cursor: ew-resize; touch-action: none; }
+.trim-lbl { font-size: 10.5px; color: var(--dim); font-variant-numeric: tabular-nums; margin-top: 2px; }
+
+/* the activity view's newer kinds (caps lock, Wi-Fi, focus) */
+.act-view .kbd { font-size: 10px; font-weight: 800; padding: 1px 5px; border-radius: 4px; background: rgba(255, 255, 255, 0.18); }

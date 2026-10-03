@@ -408,7 +408,10 @@
   // The host's click-through region grows first and shrinks after the animation.
   // closed widths (host.py COMPACT / NOTCH / COMPACT_WIDE): the notch is one width
   const notchOn = () => document.documentElement.classList.contains("notch");
-  const PILL_W_NOW = () => (notchOn() ? 200 : 126), PRAY_W_NOW = () => (notchOn() ? 200 : 176);
+  // the closed width comes from the CSS (settings: pill / notch size, and
+  // features.js widens it to fit what the slots show)
+  const cssPx = (v, d) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(v)) || d;
+  const PILL_W_NOW = () => cssPx("--w", notchOn() ? 200 : 126), PRAY_W_NOW = () => Math.max(cssPx("--w-wide", 176), PILL_W_NOW());
   let actW = 0, pillShrink = 0;
   const wantedPill = () => actW || (island.classList.contains("pray-show") || shown ? PRAY_W_NOW() : PILL_W_NOW());
   function growPill(w) { clearTimeout(pillShrink); return Promise.resolve(api.setPillWidth(Math.max(w, wantedPill()))); }
