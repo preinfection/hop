@@ -81,6 +81,7 @@
 
   // The waveform takes its colour from the artwork, like iOS does.
   function accentFrom(img) {
+    if (layout && layout.accentMode === "custom") { island.style.setProperty("--accent", layout.accentColor); return; }
     if (off("artColor")) { island.style.setProperty("--accent", "#fff"); return; }
     try {
       const c = document.createElement("canvas");
@@ -112,6 +113,19 @@
     if (!pb) {
       els.title.textContent = "Nothing playing";
       els.artist.textContent = "";
+      $("by").textContent = "";
+      // FORGET the last song: its cover, accent and position stayed on screen
+      // until the next song or a restart (seen 2026-10-01 after a video ended)
+      if (artUrl) {
+        artUrl = "";
+        for (const img of [els.miniArt, $("headArt")]) { img.onerror = null; img.removeAttribute("src"); img.style.visibility = "hidden"; }
+        island.style.setProperty("--accent", "#fff");
+      }
+      els.fill.style.transform = "scaleX(0)";
+      els.cur.textContent = "0:00";
+      els.left.textContent = "-0:00";
+      if (lyr.key) setLyrics({ key: "", lines: [] });
+      if (window.__hopPlayback) window.__hopPlayback(null);
       return;
     }
     els.title.textContent = pb.track;
@@ -133,6 +147,7 @@
       }
       if (artUrl) els.miniArt.onload = () => accentFrom(els.miniArt);
     }
+    if (window.__hopPlayback) window.__hopPlayback(pb);
     paintProgress();
   }
 
@@ -142,6 +157,7 @@
   window.__islandHover = (on) => {
     if (on === isOpen) return;
     isOpen = on;
+    if (window.__hopHover) window.__hopHover(on);
     clearInterval(ticker);
     marquees.forEach((m) => m.run(on && !off("marquee")));
     if (on) {
@@ -160,7 +176,7 @@
   // pages: 0 player, 1 Today, 2 recent clips, 3 PC & utility
   // Which pages show, and in what order, comes from the layout (settings app).
   const full = document.querySelector(".full");
-  const ALL_PAGES = [...document.querySelectorAll(".full .pg")];
+  let ALL_PAGES = [...document.querySelectorAll(".full .pg")];
   let PAGES = ALL_PAGES.slice();
   let page = 0, pageAt = 0;
   const pageId = (n) => PAGES[n] && PAGES[n].dataset.id;
@@ -175,6 +191,7 @@
     if (id === "today") paintToday();
     if (id === "clips") loadClips();
     pcActive(id === "pc");
+    if (window.__hopPage) window.__hopPage(id);
     island.classList.toggle("on-last", n === PAGES.length - 1);
     island.classList.toggle("last-music", pageId(PAGES.length - 1) === "music");
   }
@@ -192,7 +209,9 @@
     if (!L) return;
     layout = L;
     const hidden = new Set(L.hidden || []);
-    const order = (L.pages || []).filter((id) => ALL_PAGES.some((p) => p.dataset.id === id));
+    ALL_PAGES = [...document.querySelectorAll(".full .pg")];       // extension pages may have been added
+    const ext = ALL_PAGES.filter((p) => p.dataset.ext).map((p) => p.dataset.id);
+    const order = [...(L.pages || []), ...ext].filter((id) => ALL_PAGES.some((p) => p.dataset.id === id));
     const byId = Object.fromEntries(ALL_PAGES.map((p) => [p.dataset.id, p]));
     const dots = document.querySelector(".pg-dots");
     order.forEach((id) => full.insertBefore(byId[id], dots));      // DOM order = page order
@@ -215,15 +234,25 @@
     // the island's size: the host resizes the window by the same factor
     if (!window.__islandPreview) document.documentElement.style.zoom = String(L.scale || 1);
     marquees.forEach((m) => m.run(isOpen && !off("marquee")));
-    if (off("artColor")) island.style.setProperty("--accent", "#fff");
+    if (L.accentMode === "custom") island.style.setProperty("--accent", L.accentColor);
+    else if (off("artColor")) island.style.setProperty("--accent", "#fff");
     else if (els.miniArt.complete && els.miniArt.naturalWidth) accentFrom(els.miniArt);
+    if (window.__hopApply) window.__hopApply(L);
+    if (typeof tickClock === "function" && clockReady) tickClock();
   }
   window.__islandLayout = applyLayout;
   $("gear").addEventListener("click", () => api.openSettings());
   $("reload").addEventListener("click", () => api.restartApp());
   island.addEventListener("wheel", (e) => {
-    if (!isOpen || e.target.closest(".vol-btn, .vol-row")) return;   // the speaker scrolls the volume
+    if (!isOpen || e.target.closest(".vol-btn, .vol-row, .scrolls")) return;   // the speaker scrolls the volume
     e.preventDefault();
+    const how = (layout && layout.wheel) || "pages";
+    if (how === "none") return;
+    if (how === "volume") {
+      vol.level = Math.min(1, Math.max(0, Math.round((vol.level + (e.deltaY < 0 ? 0.05 : -0.05)) * 100) / 100));
+      vol.muted = false; paintVol(); sendVol(vol.level, null);
+      return;
+    }
     if (performance.now() - pageAt < 350 || Math.abs(e.deltaY) < 4) return;
     pageAt = performance.now();
     setPage(page + (e.deltaY > 0 ? 1 : -1));
@@ -669,7 +698,9 @@
   // so they still show offline). 15 min before a prayer the pill's clock
   // becomes "Asr · 12m"; at the time the island opens by itself, chimes once
   // and closes again. Sunrise is shown but never alarms.
-  const ALARMS = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"];
+  const ALARM_ALL = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"];
+  // which prayers alarm comes from the settings (all five by default)
+  const ALARMS = { includes: (n) => ALARM_ALL.includes(n) && (!layout || !layout.alarmPrayers || layout.alarmPrayers.includes(n)) };
   const SOON_MS = 15 * 60 * 1000, ALERT_MS = 12000;
   const nowMs = () => Date.now() + (window.__timeShift || 0);   // the browser demo moves time
   const timeFmt = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
@@ -749,7 +780,7 @@
     $("alSub").textContent = `${timeFmt.format(p.at)} · time to pray`;
     island.classList.add("alerting");
     api.holdOpen(true);                          // the host opens the island and keeps it open
-    if (!off("prayerChime")) api.chime();
+    if (!off("prayerChime") && (!layout || layout.alarmSound !== "none")) api.chime((layout && layout.alarmSound) || "chime");
     clearTimeout(alertTimer);
     alertTimer = setTimeout(stopAlert, ALERT_MS);
   }
@@ -811,7 +842,7 @@
     : island.classList.contains("carding") ? "card" : null;
   island.addEventListener("contextmenu", (e) => e.preventDefault());
   island.addEventListener("pointerdown", (e) => {
-    if (e.button !== 0 || !swipeTarget()) return;
+    if (e.button !== 0 || !swipeTarget() || (layout && layout.swipeUp === "nothing")) return;
     // armed, not started: a plain click (Open, Copy, Update now, Dismiss)
     // still clicks; the swipe only takes over once the pointer really moves
     sw = { y: e.clientY, t: performance.now(), dy: 0, v: 0, lastT: performance.now(), target: swipeTarget(),
@@ -889,17 +920,32 @@
 
   // ---- the clock in the compact pill: h:mm like the iPhone status bar
   // (12- or 24-hour as Windows is set, without AM/PM), redrawn on the minute.
-  const clockFmt = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
-  let clockTimer = 0;
+  // 12- or 24-hour (or as Windows is set), with or without seconds (settings)
+  let clockTimer = 0, clockKey = "", clockFmt = null, clockReady = false;
   function tickClock() {
+    clockReady = true;
     clearTimeout(clockTimer);
+    const h = (layout && layout.clock24) || "auto", secs = !!(layout && layout.clockSeconds);
+    if (clockKey !== h + secs) {
+      clockKey = h + secs;
+      clockFmt = new Intl.DateTimeFormat(undefined, { hour: h === "24" ? "2-digit" : "numeric", minute: "2-digit",
+        ...(secs ? { second: "2-digit" } : {}), ...(h === "auto" ? {} : { hourCycle: h === "24" ? "h23" : "h12" }) });
+    }
     const now = new Date(Date.now() + (window.__timeShift || 0));   // the browser demo moves time
     $("clock").textContent = clockFmt.formatToParts(now)
       .filter((p) => p.type !== "dayPeriod").map((p) => p.value).join("").trim();
     $("headClock").textContent = $("clock").textContent;
-    clockTimer = setTimeout(tickClock, 60000 - (now.getSeconds() * 1000 + now.getMilliseconds()) + 50);
+    const step = secs ? 1000 - now.getMilliseconds() + 20 : 60000 - (now.getSeconds() * 1000 + now.getMilliseconds()) + 50;
+    clockTimer = setTimeout(tickClock, step);
   }
   window.__islandClock = tickClock;
+  // features.js (the newer pages, pop-ups and looks) builds on these
+  window.__hop = {
+    api, $, esc, island, showCard, hideCard, armCard, fitCard, growPill, settlePill, setPage,
+    off: (k) => off(k), layout: () => layout, isOpen: () => isOpen, pageId: () => pageId(page),
+    clipLen, ago, vol, paintVol, sendVol, nowMs, playback: () => pb, today: () => today, prayers: () => prayers,
+    applyLayout: () => applyLayout(layout), cardSeq: () => cardSeq, cardOn: () => cardOn,
+  };
   tickClock();
   applyLayout(window.__layout || null);
 

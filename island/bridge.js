@@ -89,6 +89,8 @@
     updateAnswer: (go) => call("update_answer", go),
     swiped: () => call("swiped"),
     remapHosts: () => call("remap_hosts"),
+    // the newer calls (features.js): any host method by name
+    call: (name, ...args) => call(name, ...args),
     onState: (callback) => listeners.push(callback)
   };
 
