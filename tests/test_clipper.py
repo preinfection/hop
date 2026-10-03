@@ -119,7 +119,7 @@ def test_clean_stop_finishes_the_last_piece():
     every piece whole: the last one used to be cut off mid-frame."""
     write_settings(fps=30, quality="small")
     ring = record(5.0)
-    for f in sorted(os.listdir(ring)):
+    for f in sorted(f for f in os.listdir(ring) if f.endswith(".ts")):   # (the run's 'tracks' note isn't video)
         r = subprocess.run([C.FFMPEG, "-v", "error", "-i", os.path.join(ring, f), "-f", "null", "-"],
                            capture_output=True, text=True)
         assert r.stderr.strip() == "", f
@@ -201,7 +201,7 @@ def record(seconds=5.0):
     stop = threading.Event()
 
     def feed():
-        block = b"\0" * (C.BLOCK * C.CH * 4)
+        block = b"\0" * (C.BLOCK * C.CH * (2 if C.MIC_TRACK else 1) * 4)   # 4 channels with the mic track
         n = 0
         while not stop.is_set():
             try:
@@ -281,3 +281,89 @@ def test_ffmpeg_dies_with_the_clipper(sandbox):
             break
         time.sleep(0.25)
     assert not psutil.pid_exists(ff_pid), "ffmpeg outlived the clipper"
+
+
+# ================================================================ mic track, game names and folders
+@pytest.mark.slow
+def test_mic_track_gives_two_named_audio_tracks(sandbox, monkeypatch):
+    write_settings(fps=30, quality="small", micTrack=True)
+    monkeypatch.setattr(C, "SAVE_DIR", os.path.join(sandbox, "clips"))
+    record(6.0)
+    out = C.cut(C.snapshot(), 15, "mic")
+    # MP4 keeps a track's name as its handler name (what editors show); it
+    # can't store a "title" tag, so that is not what is checked
+    info = probe(out, "stream=codec_type:stream_tags=handler_name")
+    audio = [s for s in info["streams"] if s["codec_type"] == "audio"]
+    assert [a.get("tags", {}).get("handler_name") for a in audio] == ["System", "Microphone"]
+    r = subprocess.run([C.FFMPEG, "-v", "error", "-i", out, "-map", "0", "-f", "null", "-"], capture_output=True, text=True)
+    assert r.stderr.strip() == ""
+
+
+@pytest.mark.slow
+def test_switching_the_mic_track_never_joins_mismatched_runs(sandbox, monkeypatch):
+    """One run without the mic track, one with: the clip takes the newest run only, and plays clean."""
+    monkeypatch.setattr(C, "SAVE_DIR", os.path.join(sandbox, "clips"))
+    write_settings(fps=30, quality="small", micTrack=False)
+    record(4.5)
+    write_settings(fps=30, quality="small", micTrack=True)
+    record(4.5)
+    out = C.cut(C.snapshot(), 15, "switch")
+    info = probe(out, "stream=codec_type")
+    assert sum(s["codec_type"] == "audio" for s in info["streams"]) == 2
+    r = subprocess.run([C.FFMPEG, "-v", "error", "-i", out, "-map", "0", "-f", "null", "-"], capture_output=True, text=True)
+    assert r.stderr.strip() == ""
+
+
+def test_mic_track_off_by_default():
+    assert C.settings()["micTrack"] is False
+
+
+@pytest.mark.parametrize("name_by,folder_per,folder,prefix", [
+    (True, True, "Roblox", "Roblox"), (False, True, "Roblox", "clip"),
+    (True, False, "", "Roblox"), (False, False, "", "clip")])
+def test_clip_place(sandbox, monkeypatch, name_by, folder_per, folder, prefix):
+    monkeypatch.setattr(C, "SAVE_DIR", os.path.join(sandbox, "clips"))
+    write_settings(nameByGame=name_by, folderPerGame=folder_per)
+    got_folder, got_prefix = C.clip_place("Roblox")
+    assert got_folder == (os.path.join(C.SAVE_DIR, folder) if folder else C.SAVE_DIR)
+    assert got_prefix == prefix
+
+
+def test_no_game_is_a_plain_clip(sandbox, monkeypatch):
+    monkeypatch.setattr(C, "SAVE_DIR", os.path.join(sandbox, "clips"))
+    assert C.clip_place(None) == (C.SAVE_DIR, "clip")
+
+
+@pytest.mark.parametrize("raw,clean", [("Roblox Game Client", "Roblox"), ("VALORANT (x64)", "VALORANT"),
+                                       ('Bad:Name/<x>|?', "Bad Name x"), ("", "Desktop"), ("   ", "Desktop"),
+                                       ("Steam Client", "Steam"), ("con.", "con")])
+def test_clean_name(raw, clean):
+    assert C.clean_name(raw) == clean
+
+
+def test_clean_name_is_short():
+    assert len(C.clean_name("x" * 200)) <= 40
+
+
+def test_game_label_always_names_something():
+    label = C.game_label()
+    assert label and not any(ch in label for ch in '\/:*?"<>|')
+
+
+def test_unique_stamp_sees_the_game_folders(sandbox, monkeypatch):
+    import datetime
+    monkeypatch.setattr(C, "SAVE_DIR", os.path.join(sandbox, "clips"))
+    base = datetime.datetime.now().strftime("%Y-%m-%d %H-%M-%S")
+    os.makedirs(os.path.join(C.SAVE_DIR, "Roblox"), exist_ok=True)
+    open(os.path.join(C.SAVE_DIR, "Roblox", f"Roblox {base} (30s).mp4"), "w").close()
+    assert C.unique_stamp() != base
+
+
+@pytest.mark.slow
+def test_clip_named_and_filed_by_game(sandbox, monkeypatch):
+    write_settings(fps=30, quality="small")
+    monkeypatch.setattr(C, "SAVE_DIR", os.path.join(sandbox, "clips"))
+    record(4.5)
+    out = C.cut(C.snapshot(), 15, "named", "Roblox")
+    assert os.path.dirname(out) == os.path.join(C.SAVE_DIR, "Roblox")
+    assert os.path.basename(out) == "Roblox named (15s).mp4"

@@ -41,6 +41,7 @@ import json
 import math
 import os
 import queue
+import re
 import shutil
 import subprocess
 import sys
@@ -60,6 +61,7 @@ LENGTHS = [(15, "15s"), (30, "30s"), (60, "1min")]
 FPS = 60
 QUALITY = 22            # x264 CRF: lower is better/bigger; 18-26 is sensible
 MIC = False
+MIC_TRACK = False                      # this run: the mic on its own track (settings "micTrack")
 # Files that ship with the app: next to this script, or inside the PyInstaller
 # bundle when frozen.
 HERE = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
@@ -143,7 +145,11 @@ APP_NAME = "Hop Clipper"
 # recorder start and on WM_CLIP_RELOAD, so changes apply without a restart.
 SETTINGS_FILE = os.path.join(os.environ.get("LOCALAPPDATA", HERE), "clipper", "settings.json")
 SETTINGS_DEFAULTS = {"watermark": True, "cursor": True, "toastInClips": False, "islandInClips": True,
-                     "fps": 60, "quality": "high", "defaultSeconds": 30, "sounds": True, "saveDir": ""}
+                     "fps": 60, "quality": "high", "defaultSeconds": 30, "sounds": True, "saveDir": "",
+                     # the microphone on its own audio track (mute or remove it later in an editor)
+                     "micTrack": False,
+                     # clips named after the app in front at F8, and one folder per app
+                     "nameByGame": True, "folderPerGame": True}
 CRF = {"best": 18, "high": 22, "small": 27}
 
 
@@ -541,6 +547,15 @@ def start_ffmpeg(audio_t0, ring_dir, hwnd=None):
     t0_us = int((audio_t0 + CAPTURE_LAG_S) * 1_000_000)
     cfg = settings()
     fps, crf = cfg["fps"], CRF[cfg["quality"]]
+    # MIC ON ITS OWN TRACK: the pump sends 4 channels down the one pipe (system
+    # L R, mic L R) on the same clock, and they are split into two tracks here.
+    global MIC_TRACK
+    MIC_TRACK = bool(cfg["micTrack"])
+    with open(os.path.join(ring_dir, "tracks"), "w") as fh:
+        fh.write("2" if MIC_TRACK else "1")
+    audio_split = ("[1:a]pan=stereo|c0=c0|c1=c1[sa];[1:a]pan=stereo|c0=c2|c1=c3[ma];" if MIC_TRACK else "")
+    audio_maps = (["-map", "[sa]", "-map", "[ma]", "-metadata:s:a:0", "title=System", "-metadata:s:a:1", "title=Microphone"]
+                  if MIC_TRACK else ["-map", "1:a"])
     mark = (f"[v][2:v]overlay=x=(main_w-overlay_w)/2:y=22:format=yuv420,fps={fps},format=yuv420p,"
             if cfg["watermark"] else f"[v]fps={fps},format=yuv420p,")
     args = [
@@ -551,7 +566,7 @@ def start_ffmpeg(audio_t0, ring_dir, hwnd=None):
         # is the capture OBS uses for such games, and it also costs less (~1% vs
         # ~3%): it only hands over a frame when the screen actually changed.
         "-f", "lavfi", "-i", f"{src}:max_framerate={fps}:capture_cursor={int(cfg['cursor'])}",
-        "-f", "f32le", "-ar", str(RATE), "-ac", str(CH), "-i", "pipe:0",
+        "-f", "f32le", "-ar", str(RATE), "-ac", str(CH * 2 if MIC_TRACK else CH), "-i", "pipe:0",
         "-i", WATERMARK,                           # one frame; overlay repeats it forever
         # THE WATERMARK IS BURNT IN WHILE RECORDING, so saving stays a stream
         # copy and is instant. fps=60 turns the capture's changes-only frames
@@ -571,14 +586,14 @@ def start_ffmpeg(audio_t0, ring_dir, hwnd=None):
         # behind for good (2026-09-28 bug test: 25-37 s behind, clips ending
         # 3-5 s before F8, ffmpeg at 1 GB). fps runs after the conversion, so
         # a copy costs only the encoder's cheap skip.
-        "-filter_complex", f"[0:v]setpts='if(eq(N,0),(RTCTIME-{t0_us})/(1000000*TB),PREV_OUTPTS+PTS-PREV_INPTS)',"
+        "-filter_complex", audio_split + f"[0:v]setpts='if(eq(N,0),(RTCTIME-{t0_us})/(1000000*TB),PREV_OUTPTS+PTS-PREV_INPTS)',"
                            f"hwdownload,format=bgra,scale=out_color_matrix=bt709:out_range=tv,format=yuv420p[v];"
                            # Converted to YUV straight after the download, before the
                            # watermark and fps: benchmarked under a game-level GPU load,
                            # 17-21 -> ~30 real fps at the same CPU.
                            + mark +
                            f"setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv[out]",
-        "-map", "[out]", "-map", "1:a",
+        "-map", "[out]", *audio_maps,
         "-c:v", "libx264", "-preset", "ultrafast", "-crf", str(crf), "-threads", str(min(2, os.cpu_count() or 2)),
         "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv",
         # A keyframe every second: a clip's start can only be cut on one, and
@@ -840,7 +855,13 @@ def audio_pump(ff, stop, run, t0):
 def _audio_reader(speaker, q, stop, run, t0):
     try:
         loop_mic = sc.get_microphone(speaker.name, include_loopback=True)
-        mic_rec = sc.default_microphone().recorder(samplerate=RATE, channels=CH, blocksize=BLOCK) if MIC else None
+        separate = MIC_TRACK                     # chosen by start_ffmpeg for this run
+        mic_rec = None
+        if MIC or separate:
+            try:
+                mic_rec = sc.default_microphone().recorder(samplerate=RATE, channels=CH, blocksize=BLOCK)
+            except Exception:
+                mic_rec = None                   # no microphone: its track stays silent
         with loop_mic.recorder(samplerate=RATE, channels=CH, blocksize=BLOCK) as rec:
             if mic_rec:
                 mic_rec.__enter__()
@@ -850,7 +871,12 @@ def _audio_reader(speaker, q, stop, run, t0):
                 a = time.perf_counter()
                 block = rec.record(numframes=BLOCK)
                 waited = time.perf_counter() - a
-                if mic_rec:
+                if separate:
+                    mic = mic_rec.record(numframes=len(block)) if mic_rec else np.zeros_like(block)
+                    if len(mic) != len(block):
+                        mic = _stretch(mic.astype(np.float32), len(block)) if len(mic) else np.zeros_like(block)
+                    block = np.hstack([block, mic])
+                elif mic_rec:
                     block = np.clip(block + mic_rec.record(numframes=BLOCK), -1, 1)
                 block = block.astype(np.float32)
                 if first:
@@ -858,7 +884,7 @@ def _audio_reader(speaker, q, stop, run, t0):
                     # between the picture's time zero and then is silence.
                     lead = int(((time.time() - BLOCK / RATE) - t0) * RATE)
                     if lead > 0:
-                        block = np.vstack([np.zeros((lead, CH), np.float32), block])
+                        block = np.vstack([np.zeros((lead, block.shape[1]), np.float32), block])
                     elif lead < 0:
                         block = block[min(-lead, len(block) - 1):]
                     first = False
@@ -870,7 +896,7 @@ def _audio_reader(speaker, q, stop, run, t0):
                     return
                 elif waited > 0.25:                           # the device really stopped delivering
                     gap = int((waited - BLOCK / RATE) * RATE)
-                    block = np.vstack([np.zeros((gap, CH), np.float32), block])
+                    block = np.vstack([np.zeros((gap, block.shape[1]), np.float32), block])
                 due = (time.time() - t0) * RATE
                 err = 0.98 * err + 0.02 * (due - (sent + len(block)))
                 if err > 0.03 * RATE:                          # sound running slow: one extra sample
@@ -926,10 +952,36 @@ def _broken_run_end(piece, later):
     return False
 
 
+def _track_titles(source):
+    """Names for the audio tracks in the mp4 (the ring's mpegts pieces can't keep
+    them): "System" and "Microphone" when the mic has its own track."""
+    n = _probe(["-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0", source]).split()
+    if len(n) < 2:
+        return []
+    # MP4 keeps a track's name as its handler name ("title" alone was dropped:
+    # editors showed two unnamed tracks); both are written
+    return ["-metadata:s:a:0", "title=System", "-metadata:s:a:0", "handler_name=System",
+            "-metadata:s:a:1", "title=Microphone", "-metadata:s:a:1", "handler_name=Microphone"]
+
+
+def _tracks(run_dir):
+    """How many audio tracks a recorder run wrote ("1", or "2" with the mic track)."""
+    try:
+        with open(os.path.join(run_dir, "tracks")) as fh:
+            return fh.read().strip() or "1"
+    except OSError:
+        return "1"
+
+
 def snapshot():
     """Copy the newest minute of the ring (including the piece being written
     right now) aside, so later cuts end exactly at this moment."""
     pieces = [p for p in _all_pieces() if os.path.getsize(p) > 0][-(LONGEST // SEG + 2):]   # across runs
+    # A run with a different number of audio tracks (the mic track was switched
+    # on or off) can't be joined to this one: those pieces are left out.
+    if pieces:
+        tracks = _tracks(os.path.dirname(pieces[-1]))
+        pieces = [p for p in pieces if _tracks(os.path.dirname(p)) == tracks]
     pieces = [p for i, p in enumerate(pieces) if not _broken_run_end(p, pieces[i + 1:])]
     if not pieces:
         return None
@@ -943,14 +995,15 @@ def snapshot():
         shutil.copyfile(p, os.path.join(snap, f"{i:03d}.ts"))
     with open(os.path.join(snap, "list.txt"), "w", encoding="utf-8") as fh:
         fh.writelines(f"file '{i:03d}.ts'\n" for i in range(len(pieces)))
-    run_ff(["-f", "concat", "-safe", "0", "-i", os.path.join(snap, "list.txt"), "-c", "copy", os.path.join(snap, "all.ts")])
+    run_ff(["-f", "concat", "-safe", "0", "-i", os.path.join(snap, "list.txt"), "-map", "0", "-c", "copy",
+            os.path.join(snap, "all.ts")])
     return snap
 
 
 WATERMARK = os.path.join(HERE, "watermark.png")   # "recorded with" + the bunny, top middle
 
 
-def cut(snap, seconds, stamp):
+def cut(snap, seconds, stamp, game=None):
     """The last `seconds` of a snapshot, as an mp4 in SAVE_DIR. A stream copy:
     the watermark is already in the pixels (burnt in while recording), so this
     takes a fraction of a second whatever the length.
@@ -961,12 +1014,13 @@ def cut(snap, seconds, stamp):
     source = os.path.join(snap, "all.ts")
     if not os.path.exists(source):
         return None
+    folder, prefix = clip_place(game)
     try:
-        os.makedirs(SAVE_DIR, exist_ok=True)
+        os.makedirs(folder, exist_ok=True)
     except OSError:
         return None
     label = dict(LENGTHS).get(seconds, f"{seconds}s")
-    out = os.path.join(SAVE_DIR, f"clip {stamp} ({label}).mp4")
+    out = os.path.join(folder, f"{prefix} {stamp} ({label}).mp4")
     # The snapshot runs TAIL_S past the F8 press (see Press.take), so the clip
     # ends TAIL_S before the snapshot's end: exactly at F8. It STARTS on the
     # last keyframe at or before (F8 - seconds), with both streams from there:
@@ -984,7 +1038,8 @@ def cut(snap, seconds, stamp):
     # -ss counts from the START OF THE FILE (the snapshot's timeline begins at
     # ~1.4 s), not in its timestamps: passing the raw keyframe time landed a
     # second late, past the keyframe.
-    run_ff(["-ss", f"{start - begin:.3f}", "-i", source, "-t", f"{stop_at - start:.3f}", "-c", "copy",
+    run_ff(["-ss", f"{start - begin:.3f}", "-i", source, "-t", f"{stop_at - start:.3f}", "-map", "0", "-c", "copy",
+            *_track_titles(source),
             "-bsf:a", "aac_adtstoasc", "-movflags", "+faststart", out])
     ok = os.path.exists(out) and os.path.getsize(out) > 1024
     log("saved" if ok else "SAVE FAILED", repr(os.path.basename(out)),
@@ -1029,7 +1084,7 @@ def unique_stamp():
     second used to get the same name, and the second clip overwrote the first."""
     base = datetime.datetime.now().strftime("%Y-%m-%d %H-%M-%S")
     stamp, n = base, 2
-    while stamp in unique_stamp.used or any(f.startswith(f"clip {stamp} (") for f in _save_dir_names()):
+    while stamp in unique_stamp.used or any(f" {stamp} (" in f" {f}" or f" {stamp}." in f" {f}" for f in _save_dir_names()):
         stamp, n = f"{base} #{n}", n + 1
     unique_stamp.used.add(stamp)
     return stamp
@@ -1039,10 +1094,102 @@ unique_stamp.used = set()
 
 
 def _save_dir_names():
+    """Every file name in the save folder and its per-game folders."""
+    names = []
     try:
-        return os.listdir(SAVE_DIR)
+        for entry in os.scandir(SAVE_DIR):
+            if entry.is_dir() and not entry.name.startswith("."):
+                try:
+                    names += os.listdir(entry.path)
+                except OSError:
+                    pass
+            else:
+                names.append(entry.name)
     except OSError:
-        return []
+        pass
+    return names
+
+
+# ------------------------------------------------------------------ the app in front: names and folders
+KNOWN_APPS = {"robloxplayerbeta.exe": "Roblox", "robloxstudiobeta.exe": "Roblox Studio", "explorer.exe": "Desktop",
+              "javaw.exe": "Minecraft", "minecraft.windows.exe": "Minecraft", "valorant-win64-shipping.exe": "Valorant",
+              "fortniteclient-win64-shipping.exe": "Fortnite", "cs2.exe": "Counter-Strike 2",
+              "r5apex.exe": "Apex Legends", "gta5.exe": "GTA V", "rocketleague.exe": "Rocket League",
+              "overwatch.exe": "Overwatch", "league of legends.exe": "League of Legends",
+              "chrome.exe": "Chrome", "msedge.exe": "Edge", "brave.exe": "Brave", "firefox.exe": "Firefox",
+              "discord.exe": "Discord", "spotify.exe": "Spotify", "code.exe": "VS Code"}
+
+
+def _exe_of(h):
+    pid = wt.DWORD()
+    u32.GetWindowThreadProcessId(h, ctypes.byref(pid))
+    k32 = ctypes.windll.kernel32
+    hp = k32.OpenProcess(0x1000, False, pid.value)
+    if not hp:
+        return ""
+    try:
+        buf = ctypes.create_unicode_buffer(1024)
+        n = wt.DWORD(1024)
+        return buf.value if k32.QueryFullProcessImageNameW(hp, 0, buf, ctypes.byref(n)) else ""
+    finally:
+        k32.CloseHandle(hp)
+
+
+def _file_description(path):
+    """A program's own name (its version info's FileDescription), or ''."""
+    try:
+        ver = ctypes.windll.version
+        size = ver.GetFileVersionInfoSizeW(path, None)
+        if not size:
+            return ""
+        data = ctypes.create_string_buffer(size)
+        if not ver.GetFileVersionInfoW(path, 0, size, data):
+            return ""
+        ptr, ln = ctypes.c_void_p(), wt.UINT()
+        if not ver.VerQueryValueW(data, "\\VarFileInfo\\Translation", ctypes.byref(ptr), ctypes.byref(ln)) or not ln.value:
+            return ""
+        lang, cp = ctypes.cast(ptr, ctypes.POINTER(ctypes.c_ushort * 2)).contents
+        key = f"\\StringFileInfo\\{lang:04x}{cp:04x}\\FileDescription"
+        if not ver.VerQueryValueW(data, key, ctypes.byref(ptr), ctypes.byref(ln)) or not ln.value:
+            return ""
+        return ctypes.wstring_at(ptr, ln.value).rstrip("\x00")
+    except Exception:
+        return ""
+
+
+def clean_name(name):
+    """Safe as a file / folder name: no path characters, no marks, short."""
+    name = re.sub(r"[™®©]", "", name or "")
+    name = re.sub(r"\((x64|x86|64-bit|32-bit)\)", "", name, flags=re.I)
+    name = re.sub(r"\b(game client|launcher|application|client|64-bit)\b", "", name, flags=re.I)
+    name = re.sub(r'[\\/:*?"<>|]+', " ", name)
+    name = re.sub(r"\s+", " ", name).strip(" .")
+    return name[:40] or "Desktop"
+
+
+def game_label(h=None):
+    """The app in front, as a clip name: 'Roblox', 'Valorant', 'Chrome'..."""
+    try:
+        h = h or u32.GetForegroundWindow()
+        if not h:
+            return "Desktop"
+        path = _exe_of(h)
+        exe = os.path.basename(path).lower()
+        if exe in KNOWN_APPS:
+            return KNOWN_APPS[exe]
+        if exe in ("hopisland.exe", "hopclipper.exe", "python.exe", "pythonw.exe"):
+            return "Desktop"
+        return clean_name(_file_description(path) or os.path.splitext(os.path.basename(path))[0])
+    except Exception:
+        return "Desktop"
+
+
+def clip_place(game):
+    """(folder, name prefix) for a clip of `game`, as the settings say."""
+    cfg = settings()
+    folder = os.path.join(SAVE_DIR, clean_name(game)) if game and cfg["folderPerGame"] else SAVE_DIR
+    prefix = clean_name(game) if game and cfg["nameByGame"] else "clip"
+    return folder, prefix
 
 
 TAIL_S = 1.0   # how long after F8 the snapshot is taken; see Press.take
@@ -1071,6 +1218,7 @@ class Press:
         Press.ALL = [p for p in Press.ALL if p.busy][-20:] + [self]   # don't grow forever at 24/7
         self.pressed = time.time()
         self.stamp = unique_stamp()
+        self.game = game_label()                          # the app in front at F8
         self.snap = None
         self.ready = threading.Event()                    # set once the snapshot is taken (or failed)
         self.seconds = settings()["defaultSeconds"]       # the length asked for (may change before the first cut)
@@ -1124,7 +1272,7 @@ class Press:
                 return
             self.seconds, self.busy, self.failed = seconds, True, False
             self.on_change()
-            new = cut(self.snap, seconds, self.stamp)
+            new = cut(self.snap, seconds, self.stamp, self.game)
             if new is None:
                 # Nothing written: keep whatever clip this press already had
                 # (never delete a good file for a failed one) and say so.
@@ -1196,6 +1344,7 @@ class Recording:
         self.started = time.time()
         self.stopped = None
         self.stamp = unique_stamp()
+        self.game = game_label()                          # the app in front when it started
         self.dir = os.path.join(REC_TMP, self.stamp)
         self.busy = False                                  # saving
         self.failed = False
@@ -1275,9 +1424,11 @@ class Recording:
         keys = [k - begin for k in _keyframes(self.pieces[0])] if begin is not None else []
         ss = max([k for k in keys if k <= self.head + 0.001], default=0.0)
         length = (self.stopped - self.started) + (self.head - ss)
-        out = os.path.join(SAVE_DIR, f"recording {self.stamp}.mp4")
+        folder, prefix = clip_place(self.game)
+        os.makedirs(folder, exist_ok=True)
+        out = os.path.join(folder, f"{prefix if prefix != 'clip' else ''} recording {self.stamp}.mp4".strip())
         run_ff(["-f", "concat", "-safe", "0", "-ss", f"{ss:.3f}", "-i", listing, "-t", f"{length:.3f}",
-                "-c", "copy", "-bsf:a", "aac_adtstoasc", "-movflags", "+faststart", out])
+                "-map", "0", "-c", "copy", *_track_titles(self.pieces[0]), "-bsf:a", "aac_adtstoasc", "-movflags", "+faststart", out])
         ok = os.path.exists(out) and os.path.getsize(out) > 1024
         log("recording saved" if ok else "RECORDING SAVE FAILED", repr(os.path.basename(out)),
             f"{os.path.getsize(out) // 1024} KB" if ok else "", "pieces", len(self.pieces))
