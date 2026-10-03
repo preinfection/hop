@@ -30,6 +30,7 @@ import urllib.request
 import webview
 
 import extras
+import features
 import options
 import prayer
 from winrt.windows.media.control import (
@@ -251,6 +252,7 @@ class Island:
         self._session_id = None
         self._tokens = None
         self._refresh_pending = False
+        self.features = features.Features(self)       # the 0.1.3 pages and pop-ups (features.py)
 
     # ---- state, same shape as Electron's
     def public_config(self):
@@ -723,9 +725,18 @@ class Island:
         the link on the clipboard. pywebview hands the real path."""
         files = (event.get("dataTransfer") or {}).get("files") or []
         path = next((f.get("pywebviewFullPath") for f in files if f.get("pywebviewFullPath")), None)
-        if not path or not os.path.isfile(path):
+        if not path or not os.path.exists(path):
             self._js("window.__islandUpload && window.__islandUpload({state: 'error', message: 'Drop a file'})")
             return
+        if os.path.isdir(path) or self.layout.get("dropAction", "ask") != "upload":
+            self._js("window.__islandUpload && window.__islandUpload({state: 'cancel'})")
+            self.features.drop(path)                  # the shelf, or ask (upload / keep)
+            return
+        self._upload(path)
+
+    def _upload(self, path):
+        """Upload a file to mutate.lol and put the link on the clipboard (the
+        drop, the clip card's Upload button, a screenshot's Upload)."""
         name, size = os.path.basename(path), os.path.getsize(path)
         say = lambda d: self._js(f"window.__islandUpload && window.__islandUpload({json.dumps(d)})")
         say({"state": "uploading", "name": name, "size": size, "progress": 0})
@@ -746,7 +757,11 @@ class Island:
         self.hold = bool(on)
         return True
 
-    def chime(self):
+    def chime(self, kind="chime"):
+        if kind in ("bell", "soft"):
+            return self.features.sound(kind)
+        if kind == "none":
+            return True
         import winsound
         try:
             winsound.PlaySound(os.path.join(PAGE, "chime.wav"), winsound.SND_FILENAME | winsound.SND_ASYNC)
@@ -870,6 +885,8 @@ class Island:
             if (new["style"], new["topGap"]) != old_place or geo(new) != old_geo:
                 ui_thread(self.window, self._apply_style)
             self.window.run_js(f"window.__islandLayout && window.__islandLayout({json.dumps(new)})")
+        if getattr(self, "_tray_hwnd", None):
+            u32.PostMessageW(self._tray_hwnd, 0x8005, 0, 0)
         return dict(new)
 
     def reset_layout(self):
@@ -1640,7 +1657,27 @@ def build_web():
     return os.path.join(WEB, "index.html")
 
 
+HOTKEYS = {"ctrl+alt+space": (0x2 | 0x1, 0x20), "ctrl+shift+space": (0x2 | 0x4, 0x20), "alt+`": (0x1, 0xC0),
+           "win+alt+h": (0x8 | 0x1, 0x48)}
+
+
+def register_hotkey(hwnd):
+    """The "peek" shortcut from the settings (or none). On the tray window's
+    own thread, which is the one that gets WM_HOTKEY."""
+    u32.UnregisterHotKey(hwnd, 7)
+    L = _ISLAND.layout if _ISLAND else {}
+    if L.get("hotkey"):
+        mods, vk = HOTKEYS.get(L.get("hotkeyKey"), HOTKEYS["ctrl+alt+space"])
+        if not u32.RegisterHotKey(hwnd, 7, mods | 0x4000, vk):          # MOD_NOREPEAT
+            extras.log("hotkey taken:", L.get("hotkeyKey"))
+
+
+_ISLAND = None
+
+
 def tray(island):
+    global _ISLAND
+    _ISLAND = island
     """A tray icon with Show / Hide / Quit, like the Electron version's."""
     import ctypes.wintypes as w
     k32, sh32 = ctypes.windll.kernel32, ctypes.windll.shell32
@@ -1673,6 +1710,12 @@ def tray(island):
                     ("guidItem", ctypes.c_byte * 16), ("hBalloonIcon", w.HICON)]
 
     def proc(hwnd, msg, wparam, lparam):
+        if msg == 0x0312 and wparam == 7:                          # WM_HOTKEY: peek at the island
+            island.peek = not getattr(island, "peek", False)
+            return 0
+        if msg == 0x8005:                                          # the shortcut setting changed
+            register_hotkey(hwnd)
+            return 0
         if msg == 0x8002:                                         # "open settings" (tests, other tools)
             threading.Thread(target=island.open_settings, daemon=True).start()
             return 0
@@ -1726,6 +1769,8 @@ def tray(island):
     nid.szTip = APP_NAME
     sh32.Shell_NotifyIconW(0, ctypes.byref(nid))
     island._tray_nid = nid
+    island._tray_hwnd = hwnd
+    register_hotkey(hwnd)
     msg = w.MSG()
     while u32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
         u32.TranslateMessage(ctypes.byref(msg))
@@ -1838,6 +1883,9 @@ def main():
                             os.makedirs(extras.THUMBS, exist_ok=True)
                             core.SetVirtualHostNameToFolderMapping("thumbs.island", extras.THUMBS,
                                                                    CoreWebView2HostResourceAccessKind.Allow)
+                            os.makedirs(features.EXT_DIR, exist_ok=True)
+                            core.SetVirtualHostNameToFolderMapping("ext.island", features.EXT_DIR,
+                                                                   CoreWebView2HostResourceAccessKind.Allow)
                             done.append(1)
                     try:
                         ui_thread(island.window, attempt)
@@ -1870,6 +1918,7 @@ def main():
         threading.Thread(target=island.update_loop, daemon=True).start()
         threading.Thread(target=island.extras_loop, daemon=True).start()
         threading.Thread(target=island.clip_watch, daemon=True).start()
+        island.features.start()
         # Dropped files: pywebview gives the real path to a Python handler.
         try:
             from webview.dom import DOMEventHandler
@@ -1889,7 +1938,7 @@ def main():
     webview.start(started)
 
 
-class IslandApi:
+class IslandApi(features.FeatureApi):
     """What window.pywebview.api exposes to bridge.js (names match bridge.js)."""
     def __init__(self, island):
         self._i = island
@@ -2036,6 +2085,7 @@ class SettingsApi(IslandApi):
     set_expanded = resize_expanded = start_drag = recenter = set_extra = _noop
     hold_open = chime = set_pill_wide = set_pill_width = set_big = snip = _noop
     save_config = open_settings = restart_app = update_answer = swiped = _noop
+    want_keys = agent_answer = install_update = drop_choice = _noop
 
     def record(self, on):
         return None
@@ -2093,6 +2143,9 @@ class SettingsApi(IslandApi):
 
     def open_clips_folder(self):
         return self._i.open_clips_folder()
+
+
+features.host = sys.modules[__name__]
 
 
 if __name__ == "__main__":

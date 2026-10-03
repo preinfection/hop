@@ -541,12 +541,15 @@
   document.addEventListener("dragenter", (e) => {
     if (!hasFiles(e) || uploading) return;
     e.preventDefault();
-    if (dragDepth++ === 0) dropCard("Drop to upload", "mutate.lol · link gets copied");
+    const how = (layout && layout.dropAction) || "upload";
+    if (dragDepth++ === 0) dropCard(how === "shelf" ? "Drop to keep it" : how === "ask" ? "Drop it here" : "Drop to upload",
+                                    how === "shelf" ? "On the island's shelf" : how === "ask" ? "Upload it or keep it on the shelf" : "mutate.lol · link gets copied");
   });
   document.addEventListener("dragover", (e) => { if (hasFiles(e)) e.preventDefault(); });
   document.addEventListener("dragleave", () => { if (uploading) return; if (--dragDepth <= 0) { dragDepth = 0; hideCard(); } });
   document.addEventListener("drop", (e) => { e.preventDefault(); dragDepth = 0; uploading = true; dropCard("Uploading…", "", '<div class="prog busy"><i></i></div>'); });
   window.__islandUpload = (u) => {
+    if (u.state === "cancel") { uploading = false; hideCard(); return; }   // not uploaded: the shelf, or "what should happen?"
     if (u.state === "uploading") {
       uploading = true;
       const mb = u.size ? `${(u.size / 1048576).toFixed(u.size < 10485760 ? 1 : 0)} MB` : "";

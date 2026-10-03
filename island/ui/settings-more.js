@@ -345,7 +345,7 @@
     const set = new Set(S.L.alarmPrayers); set.has(b.dataset.pr) ? set.delete(b.dataset.pr) : set.add(b.dataset.pr);
     S.change({ alarmPrayers: ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"].filter((n) => set.has(n)) });
   });
-  $("soundTest").addEventListener("click", () => S.api.chime(S.L.alarmSound));
+  $("soundTest").addEventListener("click", () => S.L.alarmSound !== "none" && S.api.play_sound(S.L.alarmSound));
 
   // ---------------------------------------------------------------- extensions
   function renderExtensions(L) {
