@@ -244,8 +244,8 @@
     if (L.accentMode === "custom") island.style.setProperty("--accent", L.accentColor);
     else if (off("artColor")) island.style.setProperty("--accent", "#fff");
     else if (els.miniArt.complete && els.miniArt.naturalWidth) accentFrom(els.miniArt);
-    if (window.__hopApply) window.__hopApply(L);
     if (typeof tickClock === "function" && clockReady) tickClock();
+    if (window.__hopApply) window.__hopApply(L);
   }
   window.__islandLayout = applyLayout;
   $("gear").addEventListener("click", () => api.openSettings());
@@ -395,6 +395,7 @@
       if (speedBusy) return;
       const b = $("aPing");
       b.querySelector("span").textContent = ms == null ? "–" : `${ms}`;
+      b.style.setProperty("--p", ms == null ? 100 : Math.max(6, Math.min(100, Math.round(ms / 2))));   // 200 ms = full
       $("pingLabel").textContent = ms == null ? "Offline" : "Ping";
       b.classList.toggle("slow", ms != null && ms >= 80 && ms < 150);
       b.classList.toggle("bad", ms == null || ms >= 150);
@@ -457,13 +458,17 @@
              (a.pct != null ? `<div class="side"><span class="dim">${a.pct}%</span><div class="ring" style="--p:${a.pct}"></div></div>` : `<div class="side"><span class="dim">Connected</span></div>`);
     } else return;
     clearTimeout(actTimer);
+    w = Math.max(w, PILL_W_NOW());
     actW = w;
     growPill(w).then(() => {
       $("actView").innerHTML = html;
       island.style.setProperty("--act-w", w + "px");
       island.classList.add("act");
     });
-    actTimer = setTimeout(() => { actW = 0; island.classList.remove("act"); settlePill(); }, a.kind === "low" ? 5000 : 3500);
+    actTimer = setTimeout(() => {
+      island.classList.add("act-out");
+      setTimeout(() => { actW = 0; island.classList.remove("act", "act-out"); settlePill(); }, 130);
+    }, a.kind === "low" ? 5000 : 3500);
   };
 
   // ---- expanded cards: clip saved, drop to upload
@@ -478,10 +483,9 @@
       card.innerHTML = html;
       // Fit the card to what is in it (no empty space): measure its natural
       // width, then fix it, so long names still end in "…" at 360.
-      fitCard();
-      island.style.setProperty("--card-h", h + "px");
+      fitCard();                                     // its size comes from its content (h is only a fallback)
       island.classList.add("carding");
-      if (after) after();
+      if (after) { after(); fitCard(); }             // what after() added counts too
     };
     if (cardOn) draw(); else { cardOn = true; Promise.resolve(api.setBig(true)).then(draw); }
     if (ms) armCard(ms);
@@ -489,10 +493,17 @@
   function fitCard() {
     card.style.width = "max-content";
     // up to the open island's width: a long line makes the card wider, not wrapped
-    const w = Math.min(Math.max(360, ((layout && layout.openW) || 360) - 20), 560, Math.max(200, card.offsetWidth + (card.querySelector(".body.one") ? 10 : 0)));   // a one-line command: fonts can measure a hair narrow
-    card.style.width = "";
+    const w = Math.min(Math.max(360, ((layout && layout.openW) || 360) - 20), 560,
+                       Math.max(160, card.offsetWidth + (card.querySelector(".body.one") ? 10 : 3)));   // fonts can measure a hair narrow (a one-line command more)
+    card.style.width = w + "px";
+    card.style.height = "auto";
+    const maxH = ((layout && layout.openH) || 150) + 42;          // the window's room below the open island
+    const h = Math.min(maxH, Math.max(56, Math.ceil(card.scrollHeight) + 1));
+    card.style.width = card.style.height = "";
     island.style.setProperty("--card-w", w + "px");
+    island.style.setProperty("--card-h", h + "px");
   }
+  window.__islandFitCard = fitCard;
 
   function armCard(ms) {
     clearTimeout(cardTimer);

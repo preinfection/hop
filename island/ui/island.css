@@ -477,7 +477,7 @@ button.gring:hover::before { background: #111; }
   height: 84px;
   margin-left: calc(var(--open-w) / -2);
   box-sizing: border-box;
-  padding: 0 18px 0 22px;
+  padding: 0 20px;
   display: flex;
   align-items: center;
   gap: 14px;

@@ -40,7 +40,7 @@
     const notch = L.style === "notch";
     const st = root.style;
     st.setProperty("--w", (notch ? L.notchW : L.pillW) + "px");
-    fitW = 0;
+    fitW = 0; fitWide = 0;
     st.setProperty("--h", (notch ? L.notchH : L.pillH) + "px");
     st.setProperty("--w-wide", Math.max(notch ? L.notchW : 176, notch ? L.notchW : L.pillW) + "px");
     st.setProperty("--open-w", L.openW + "px");
@@ -99,7 +99,17 @@
     const want = { l: L.slotLeft, c: L.slotCenter, r: L.slotRight };
     const key = JSON.stringify(want);
     if (key === slotKey) return;
+    const first = !slotKey;
     slotKey = key;
+    if (!first) {
+      mini.classList.add("slots-out");
+      clearTimeout(applySlots.t);
+      applySlots.t = setTimeout(() => { placeSlots(want); requestAnimationFrame(() => mini.classList.remove("slots-out")); }, 120);
+      return;
+    }
+    placeSlots(want);
+  }
+  function placeSlots(want) {
     Object.values(NODES).forEach((n) => holder.appendChild(n));
     const used = new Set();
     for (const side of ["l", "c", "r"]) {
@@ -141,19 +151,26 @@
   }
   // The pill grows to fit what its slots show (a weather slot beside a clock
   // with seconds is wider than 126 px), and the host's click area with it.
-  let fitW = 0;
+  let fitW = 0, fitWide = 0;
   function fitPill() {
     const Lx = L(); if (!Lx.pillW) return;
     const base = Lx.style === "notch" ? Lx.notchW : Lx.pillW;
-    const l = slotBox.l.offsetWidth, c = slotBox.c.offsetWidth, r = slotBox.r.offsetWidth;
-    const dot = pdot.classList.contains("mic") || pdot.classList.contains("cam") ? 11 : 0;    // room for the privacy dot
+    const l = slotBox.l.offsetWidth, r = slotBox.r.offsetWidth;
+    const mid = (el) => (el && el.textContent.trim() ? el.scrollWidth : 0);
+    const c = Math.max(slotBox.c.offsetWidth, island.classList.contains("live-on") ? mid(live) : 0,
+                       island.classList.contains("recording") ? mid($("recTime")) : 0);
+    const dot = pdot.classList.contains("mic") || pdot.classList.contains("cam") ? 10 : 0;    // room for the privacy dot
     island.classList.toggle("pdot-on", !!dot);
-    const need = Math.ceil(c ? c + 2 * Math.max(14 + l, 17 + r + dot) : l + r + 34 + dot);
-    const w = Math.max(base, Math.min(Lx.openW, need));
-    if (w === fitW) return;
-    fitW = w;
+    // .mini's 10 px padding + a 12 px gap between a side slot and the middle, the same on both sides
+    const side = 10 + 12 + Math.max(l, r + dot);
+    const fit = (cw) => Math.ceil(cw ? cw + 2 * side : 10 + l + 16 + r + dot + 10);
+    const w = Math.max(base, Math.min(Lx.openW, fit(c)));
+    // the prayer countdown ("Maghrib · 12m") is wider than the clock: its own width
+    const wide = Math.max(Lx.style === "notch" ? base : 176, w, Math.min(Lx.openW, fit(mid($("prayTime")))));
+    if (w === fitW && wide === fitWide) return;
+    fitW = w; fitWide = wide;
     root.style.setProperty("--w", w + "px");
-    if (!Lx.style || Lx.style !== "notch") root.style.setProperty("--w-wide", Math.max(176, w) + "px");
+    root.style.setProperty("--w-wide", wide + "px");
     H.settlePill();
   }
   const speed = (bps) => bps >= 1e6 ? `${(bps / 1e6).toFixed(bps >= 1e7 ? 0 : 1)}M` : bps >= 1e3 ? `${Math.round(bps / 1e3)}K` : `${Math.round(bps || 0)}B`;
@@ -256,12 +273,17 @@
     if (P && !P.on) return;
     if (quietNow()) return;
     clearTimeout(actTimer);
+    w = Math.max(w, fitW || 0, parseFloat(getComputedStyle(root).getPropertyValue("--w")) || 0);
+    island.classList.remove("act-out");
     H.growPill(w).then(() => {
       $("actView").innerHTML = html;
       island.style.setProperty("--act-w", w + "px");
       island.classList.add("act");
     });
-    actTimer = setTimeout(() => { island.classList.remove("act"); H.settlePill(); }, ms || (P && P.ms) || 2500);
+    actTimer = setTimeout(() => {
+      island.classList.add("act-out");
+      actTimer = setTimeout(() => { island.classList.remove("act", "act-out"); H.settlePill(); }, 130);
+    }, ms || (P && P.ms) || 2500);
     idleReset();
   }
 
@@ -322,7 +344,7 @@
     $("agSub").textContent = ss.length ? `${ss.filter((s) => s.status === "work").length} working` : "";
     rows.innerHTML = ss.length ? ss.slice(0, 6).map((s, i) => `<div class="row click" data-i="${i}">${mascot(s.tool, s.status)}
         <div class="grow"><div class="t1">${esc(s.name)}</div><div class="t2">${esc(s.detail || "")}</div></div>
-        <span class="ag-st ${s.status}">${ST[s.status] || s.status}</span></div>`).join("")
+        <span class="ag-st ${s.status}">${ST[s.status] || s.status}</span><i class="ag-dot ${s.status}" title="${ST[s.status] || s.status}"></i></div>`).join("")
       : `<div class="empty-note">No agents running.<br>Connect Claude Code in Settings → AI agents, then start a session.</div>`;
     rows.querySelectorAll(".row[data-i]").forEach((r) => r.addEventListener("click", () => call("agent_jump", ss[+r.dataset.i].id)));
     const u = state.usage, box = $("agUsage");
@@ -362,7 +384,7 @@
         360, 196, () => {
           document.querySelector(".card").classList.add("tall");
           const fb = $("aFb");
-          fb.addEventListener("input", () => { fb.style.height = "auto"; fb.style.height = Math.min(54, fb.scrollHeight) + "px"; });
+          fb.addEventListener("input", () => { fb.style.height = "auto"; fb.style.height = Math.min(54, fb.scrollHeight) + "px"; H.fitCard(); });
           fb.addEventListener("keydown", (e) => e.stopPropagation());
           $("aGo").onclick = () => { call("agent_answer", a.id, "allow"); H.hideCard(); };
           $("aMore").onclick = () => { call("agent_answer", a.id, { deny: $("aFb").value || "Keep planning." }); H.hideCard(); };
@@ -472,7 +494,9 @@
         <div class="grow"><div class="t1">${esc(e.title)}</div>${e.location ? `<div class="t2">${esc(e.location)}</div>` : ""}</div>
         ${e.link ? `<button class="mini-btn go" data-j="${i}">Join</button>` : ""}</div>`).join("")
       : `<div class="empty-note">${state.calSet ? "Nothing coming up." : "Paste your calendar's iCal link in Settings → Calendar (Google: Settings → your calendar → Secret address in iCal format)."}</div>`;
-    rows.querySelectorAll("[data-j]").forEach((b) => b.onclick = () => call("open_url", soon[+b.dataset.j].link));
+    rows.querySelectorAll("[data-j]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); call("open_url", soon[+b.dataset.j].link); });
+    // a click on a meeting's row joins it too (narrow tiles have no room for the button)
+    rows.querySelectorAll(".row").forEach((r, i) => { if (soon[i] && soon[i].link) { r.classList.add("click"); r.onclick = () => call("open_url", soon[i].link); } });
   }
   $("calOpen").addEventListener("click", () => call("open_calendar"));
   setInterval(() => {
@@ -569,7 +593,7 @@
         popup("sports", `<div class="goal-crest">${logo ? `<img src="${esc(logo)}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${ball}',style:'font-size:30px'}))">` : `<span style="font-size:30px">${ball}</span>`}<span class="ball">${ball}</span></div>
           <div class="ct"><div class="goal-word">${word}!</div>
           <div class="goal-line"><span class="${homeScored ? "hit" : ""}">${esc(m.home)}</span><span class="sc">${m.hs} – ${m.as}</span><span class="${homeScored ? "" : "hit"}">${esc(m.away)}</span></div>
-          <div class="goal-sub">${esc(team)} · ${esc(m.status)} · ${esc(m.league)}</div></div>`, 340, 92, () => {
+          <div class="goal-sub">${esc(m.status)} · ${esc(m.league)}</div></div>`, 340, 92, () => {
             document.querySelector(".card").classList.add("goal");
           }, { history: { app: "Scores", title: `${m.home} ${m.hs} – ${m.as} ${m.away}`, text: m.status } });
       }
@@ -746,15 +770,16 @@
         const v = document.querySelector(".card video"), bar = $("trim");
         const paint = () => {
           const w = bar.offsetWidth;
-          $("trA").style.left = (a / dur) * w + "px"; $("trB").style.left = (b / dur) * w + "px";
-          $("trSel").style.left = (a / dur) * w + "px"; $("trSel").style.width = ((b - a) / dur) * w + "px";
+          const x = (t) => 5 + (t / dur) * (w - 10);
+          $("trA").style.left = x(a) + "px"; $("trB").style.left = x(b) + "px";
+          $("trSel").style.left = x(a) + "px"; $("trSel").style.width = (x(b) - x(a)) + "px";
           $("trLbl").textContent = `${a.toFixed(1)}s – ${b.toFixed(1)}s · ${(b - a).toFixed(1)}s`;
         };
         const drag = (which) => (e) => {
           e.stopPropagation();
           const h = e.currentTarget; h.setPointerCapture(e.pointerId);
           const move = (ev) => {
-            const r = bar.getBoundingClientRect(), t = Math.min(dur, Math.max(0, ((ev.clientX - r.left) / r.width) * dur));
+            const r = bar.getBoundingClientRect(), t = Math.min(dur, Math.max(0, ((ev.clientX - r.left - 5) / (r.width - 10)) * dur));
             if (which === "a") a = Math.min(t, b - 0.5); else b = Math.max(t, a + 0.5);
             v.currentTime = which === "a" ? a : Math.max(a, b - 1);
             paint();

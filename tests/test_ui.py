@@ -320,6 +320,8 @@ def test_settings_tooltip(app, sel, text):
 @pytest.mark.parametrize("sel,text", [("#volBtn", "Volume"), ("#center", "Snap to top middle")])
 def test_island_tooltip(app, sel, text):
     pg, frame, _ = app
+    pg.mouse.move(2, 2)                                   # start from nowhere (a previous test's pointer)
+    pg.wait_for_timeout(200)
     frame.hover(sel)
     frame.wait_for_function("t => document.querySelector('.hop-tip.on')?.textContent === t", arg=text, timeout=5000)
 

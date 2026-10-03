@@ -98,7 +98,7 @@
       else if (kind === "color" && /^#[0-9a-f]{6}$/i.test(v)) out[k] = v.toLowerCase();
       else if (kind === "time" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v)) out[k] = v;
       else if (kind === "str" && typeof v === "string") out[k] = v.slice(0, s[2]);
-      else if (["order", "subset", "exes", "names", "countdowns", "reminders", "teams"].includes(kind) && Array.isArray(v)) out[k] = v;
+      else if (["order", "subset", "exes", "names", "countdowns", "reminders", "teams", "boards"].includes(kind) && Array.isArray(v)) out[k] = v;
       else if (kind === "popups" && v && typeof v === "object") out[k] = v;
     }
     if (out.hidden.length >= out.pages.length) out.hidden = out.hidden.filter((p) => p !== "music");

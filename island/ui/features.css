@@ -453,3 +453,77 @@ html.motion-reduced .bars i, html.motion-reduced .rec-dot, html.motion-reduced .
 @keyframes goal-sweep { from { background-position: 100% 0; } to { background-position: 0 0; } }
 html.motion-reduced .goal-crest *, html.motion-reduced .goal-word, html.motion-reduced .goal-crest::after { animation: none !important; }
 .goal-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px; }
+
+
+/* ================================================================ closed notch review (2026-10-03)
+   Same gap on both sides, one look for everything that can sit in the
+   middle, quick fades instead of jumps, and no dip below the base width. */
+.mini { padding: 0 10px; }
+.act-view { padding: 0 12px; }
+.notch .mini-art { transform: none; }
+.clock, .rec-time, .pray-time, .live-text, .sv {
+  font-size: 12.5px; font-weight: 600; letter-spacing: 0; font-variant-numeric: tabular-nums;
+}
+.mini .slot { transition: opacity 120ms ease; }
+.mini.slots-out .slot { opacity: 0; }
+.island.act.act-out .act-view { opacity: 0 !important; transition: opacity 110ms ease !important; }
+/* closed sizes change without a spring (the overshoot dipped below the base
+   width as it settled); opening still springs */
+.island:not(.open):not(.carding) {
+  transition: width calc(var(--dur) * 0.8) var(--ease-h), height calc(var(--dur) * 0.85) var(--ease-h),
+    border-radius var(--dur) var(--ease-h), transform calc(var(--dur) * 1.1) var(--ease-w), opacity 300ms ease;
+}
+
+
+/* ================================================================ open island review (2026-10-03) */
+.island .tile .ag-st + .ag-dot { display: none; }
+.ag-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--faint); }
+.ag-dot.work { background: var(--hop-blue); } .ag-dot.ask { background: var(--hop-orange); } .ag-dot.done { background: var(--hop-green); }
+/* list widgets start at the top; an empty state sits in the middle of what's left */
+.tile .wg-agents, .tile .wg-calendar, .tile .wg-alerts, .tile .wg-sports, .tile .wg-shelf, .tile .wg-notes, .tile .wg-clips { justify-content: flex-start; }
+.tile .empty-note { flex: 1 1 auto; display: grid; place-items: center; text-align: center; text-wrap: balance; padding: 0 6px; }
+/* every widget header has the same height, so neighbours line up */
+.ph, .tile .pg-head { height: 22px; margin-bottom: 6px !important; flex: none; }
+.pg .lnk, .tile .pg-head .link { height: 20px; padding: 0 9px; font-size: 11px; border-radius: 10px; }
+/* agents: narrow or short tiles drop the extras */
+@container (max-height: 130px) { .wg-agents .usage { display: none; } }
+@container (max-width: 180px) {
+  .wg-agents .usage, .wg-agents #agSub, .wg-agents .ag-st { display: none; }
+  .wg-agents .ag-st + .ag-dot { display: block; }
+  .wg-agents .row { padding: 4px 6px; gap: 6px; }
+}
+/* clips: the thumbnails fit the tile's height */
+.tile .wg-clips .thumbs { flex: 1 1 auto; min-height: 0; }
+.tile .wg-clips .tcol { display: flex; flex-direction: column; min-height: 0; }
+.tile .wg-clips .thumb { flex: 1 1 auto; min-height: 0; aspect-ratio: auto; }
+@container (max-height: 130px) { .wg-clips .thumbs { max-height: none; } }
+/* shelf and notes in short tiles */
+@container (max-height: 130px) {
+  .wg-shelf .sh .ic { width: 36px; height: 36px; border-radius: 10px; }
+  .wg-shelf .sh { width: 54px; }
+  .wg-shelf .sh .nm { margin-top: 2px; font-size: 10px; }
+}
+.tile .notes { min-height: 0; }
+/* today: roomy at "wide", no clipped date at "small" */
+.tile .wg-today { padding: 12px 14px; }
+@container (max-height: 130px) { .wg-today #evts { display: none; } .wg-today { gap: 10px !important; } }
+.tile .hij { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+@container (max-width: 180px) { .wg-today .today-l { min-width: 0; max-width: 100%; } .wg-today .hij { font-size: 12px; } }
+/* plan: whole lines only (5 x 16 px) */
+.card .plan { line-height: 16px; max-height: 80px; }
+.card.goal .goal-crest::after { inset: -3px; }
+/* a card's height follows its content (island.js fitCard) */
+.card { box-sizing: border-box; }
+/* scores: a list that scrolls inside its tile */
+.tile #spRows { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.tile .match + .match { margin-top: 6px; }
+/* calendar in a narrow tile: the whole row joins the meeting (no room for the button) */
+@container (max-width: 180px) {
+  .wg-calendar .mini-btn { display: none; }
+  .wg-calendar .row { flex-wrap: wrap; row-gap: 0; }
+  .wg-calendar .row .tm { width: 100%; }
+}
+.card .plan { max-height: calc(16px * 4 + 12px); }          /* 4 whole lines + its padding */
+.card .body { max-width: 320px; text-wrap: pretty; }
+.mascot.big { margin: 0; }
+.trim-lbl { min-height: 15px; }

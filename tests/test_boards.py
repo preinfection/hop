@@ -88,13 +88,53 @@ def test_classic_and_back(board_app):
 
 CASES = [(w, s) for w, sizes in options.WIDGETS.items() for s in sizes]
 
+FILL = r"""(() => {
+  const now = Date.now();
+  window.__hopEvent('agents', {sessions: [
+      {id: 'a', tool: 'claude', name: 'hop', status: 'work', detail: 'Editing island/ui/features.js'},
+      {id: 'b', tool: 'codex', name: 'mutate', status: 'ask', detail: 'Wants to run npm test'}],
+    usage: {five: 42, week: 18, fiveReset: '2h 14m', weekReset: '3d 4h'}});
+  window.__hopEvent('calendar', [
+    {uid: '1', title: 'Design review: Hop 0.1.3 with the whole team', start: now + 3.6e6, end: now + 5e6, location: 'Google Meet', link: 'https://meet.google.com/abc-defg-hij'},
+    {uid: '2', title: 'Gym', start: now + 9e6, end: now + 1e7, location: ''},
+    {uid: '3', title: 'Dinner', start: now + 2e7, end: now + 2.2e7, location: 'Home'}]);
+  window.__hopEvent('sports', [{id: 'm1', league: 'EPL', home: 'Arsenal', away: 'Chelsea', hs: '2', as: '1', status: "67'", live: true, state: 'in'},
+                               {id: 'm2', league: 'EPL', home: 'Brighton & Hove Albion', away: 'Wolverhampton', hs: '0', as: '0', status: '3:00 PM', live: false, state: 'pre'}]);
+  window.__hopEvent('shelf', [{name: 'design-notes-final-v2.pdf', path: 'C:/x/a.pdf', pinned: true}, {name: 'logo.png', path: 'C:/x/b.png'},
+                              {name: 'trip.zip', path: 'C:/x/c.zip'}, {name: 'clip.mp4', path: 'C:/x/d.mp4'}]);
+  window.__hopEvent('battery', {pct: 64, charging: false, minutes: 192, health: 56, design: 40466, full: 22478, cycles: 312,
+                                drainers: [{name: 'RobloxPlayerBeta', cpu: 21.4}, {name: 'Brave', cpu: 6.2}, {name: 'Spotify', cpu: 1.1}]});
+  for (const n of [['Discord', 'preinfection', 'yo did you push the notch build? the clip from last night is crazy'],
+                   ['Outlook', 'Porkbun', 'gethop.lol renews on 2027-09-30'], ['Teams', 'Standup', 'Starting in 5 minutes']])
+    window.__hopPopup('notif', '<div class=ct>x</div>', 200, 60, null, {history: {app: n[0], title: n[1], text: n[2]}});
+  document.getElementById('notes') && (document.getElementById('notes').textContent = 'Ideas for 0.1.4:\n- per-game clip folders\n- record mic as its own track\n- a much longer line that has to wrap somewhere in the tile because it is long');
+})()"""
+
+
+@pytest.fixture()
+def clips_for(board_app, sandbox):
+    """Three real clips in the clips folder, so the Clips widget has pictures."""
+    import subprocess
+    import extras
+    d = os.path.join(sandbox, "board-clips")
+    os.makedirs(d, exist_ok=True)
+    for i, secs in enumerate((15, 30, 60)):
+        out = os.path.join(d, f"clip 2026-01-0{i + 1} 10-00-00 ({secs}s).mp4")
+        if not os.path.exists(out):
+            subprocess.run([extras.FFMPEG, "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=320x180:r=15:d=1",
+                            "-c:v", "libx264", "-pix_fmt", "yuv420p", out], check=True)
+    board_app[2].set_clipper({"saveDir": d})
+
 
 @pytest.mark.parametrize("widget,size", CASES)
-def test_every_widget_fits_its_tile(board_app, widget, size):
-    """Nothing a widget shows pokes out of its tile, at any size it allows."""
+def test_every_widget_fits_its_tile(board_app, clips_for, widget, size):
+    """Nothing a widget shows pokes out of its tile, at any size it allows,
+    WITH content in it (agents, events, scores, files, notes, clips...)."""
     pg, frame, isl = board_app
     L = isl.set_layout({**isl.layout, "boards": [{"name": "T", "widgets": [{"w": widget, "s": size}]}]})
     push_layout(pg, L)
+    frame.evaluate(FILL)
+    frame.evaluate("window.__islandHover && document.querySelector('.card') && (document.getElementById('island').classList.remove('carding'))")
     frame.wait_for_function(f"!!document.querySelector('.tile[data-w={widget}].sz-{size}')")
     frame.evaluate("window.__islandSetPage(0)")
     frame.wait_for_timeout(450)
@@ -102,7 +142,10 @@ def test_every_widget_fits_its_tile(board_app, widget, size):
       const t = document.querySelector('.tile[data-w=' + w + ']'), r = t.getBoundingClientRect(), bad = [];
       for (const el of t.querySelectorAll('.wg *')) {
         const s = getComputedStyle(el);
-        if (s.display === 'none' || s.visibility === 'hidden' || el.closest('.vol-row, .scrolls, .rows, .sh-items, .pr-view, .mq, svg')) continue;
+        if (s.display === 'none' || s.visibility === 'hidden' || el.closest('.vol-row, .pr-view, .mq, svg')) continue;
+        const sc = el.parentElement && el.parentElement.closest('.rows, .scrolls');
+        if (sc && sc !== el && sc.scrollHeight > sc.clientHeight + 1 && getComputedStyle(sc).overflowY !== 'visible')
+          continue;                                       // clipped by a list that scrolls: the list's own box is what's checked
         const e = el.getBoundingClientRect();
         if (!e.width || !e.height) continue;
         if (e.left < r.left - 1 || e.right > r.right + 1 || e.top < r.top - 1 || e.bottom > r.bottom + 1)
