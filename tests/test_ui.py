@@ -155,7 +155,8 @@ def test_move_page(app, page, direction):
     assert frame.evaluate("window.__islandPageIds()") == after
 
 
-@pytest.mark.parametrize("order", list(itertools.permutations(host.PAGE_IDS)))
+# the 4 core pages: 4! = 24 orders (all 13 pages would be 6 billion, which ran the PC out of memory)
+@pytest.mark.parametrize("order", list(itertools.permutations(host.CORE_PAGES)))
 def test_gear_on_last_page_any_order(app, order):
     """Whatever the order, the settings gear and refresh button sit on the last page."""
     pg, frame, isl = app

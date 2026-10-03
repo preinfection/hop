@@ -368,9 +368,18 @@ def log(*parts):
 
 
 def recent_clips(n=3):
-    """The newest clips / recordings: name, path, size, when, length (from the name)."""
+    """The newest clips / recordings: name, path, size, when, length (from the
+    name). Hop Clipper may file them in a folder per game, one level down."""
+    files = []
     try:
-        files = [os.path.join(CLIPS, f) for f in os.listdir(CLIPS) if f.lower().endswith(".mp4")]
+        for e in os.scandir(CLIPS):
+            if e.is_file() and e.name.lower().endswith(".mp4"):
+                files.append(e.path)
+            elif e.is_dir() and not e.name.startswith("."):
+                try:
+                    files += [os.path.join(e.path, f) for f in os.listdir(e.path) if f.lower().endswith(".mp4")]
+                except OSError:
+                    pass
     except OSError:
         return []
     files.sort(key=os.path.getmtime, reverse=True)
@@ -380,7 +389,8 @@ def recent_clips(n=3):
         secs = int(m.group(1)) if m and m.group(1) else int(m.group(2)) * 60 if m else None
         out.append({"name": os.path.basename(p), "path": p, "size": os.path.getsize(p),
                     "at": os.path.getmtime(p), "seconds": secs,
-                    "kind": "recording" if os.path.basename(p).startswith("recording") else "clip"})
+                    "kind": "recording" if re.search(r"(^|\s)recording\s", os.path.basename(p)) else "clip",
+                    "game": os.path.basename(os.path.dirname(p)) if os.path.dirname(p) != CLIPS else ""})
     return out
 
 

@@ -184,7 +184,8 @@ def clipper_command():
         return [pyw if os.path.exists(pyw) else sys.executable, os.path.abspath(script)]
     return None
 CLIPPER_DEFAULTS = {"watermark": True, "cursor": True, "toastInClips": False, "islandInClips": True,
-                    "fps": 60, "quality": "high", "defaultSeconds": 30, "sounds": True, "saveDir": ""}
+                    "fps": 60, "quality": "high", "defaultSeconds": 30, "sounds": True, "saveDir": "",
+                    "micTrack": False, "nameByGame": True, "folderPerGame": True}     # as clipper.py SETTINGS_DEFAULTS
 WM_CLIP_RELOAD = 0x8000 + 14
 
 
@@ -202,6 +203,18 @@ def clipper_settings():
 def clips_dir():
     """Where Hop Clipper saves (its settings; "" = Videos\\Hop Clips)."""
     return (clipper_settings().get("saveDir") or "").strip() or DEFAULT_CLIPS
+
+
+def clip_url(path):
+    """The clip's address on the private clips.island host: its path under the
+    clips folder (per-game folders included), each part URL-quoted."""
+    try:
+        rel = os.path.relpath(path, clips_dir())
+    except ValueError:                                   # another drive
+        rel = os.path.basename(path)
+    if rel.startswith(".."):
+        rel = os.path.basename(path)
+    return "https://clips.island/" + "/".join(urllib.parse.quote(p) for p in rel.split(os.sep))
 
 
 def clipper_state():
@@ -631,7 +644,7 @@ class Island:
     def get_clips(self):
         clips = extras.recent_clips(3)
         for c in clips:
-            c["url"] = "https://clips.island/" + urllib.parse.quote(c["name"])
+            c["url"] = clip_url(c["path"])
             # The picture goes to the page as data, not as a thumbs.island link:
             # that private host name only works once WebView2 has mapped it,
             # and after a cold boot it sometimes never was (2026-10-03: every
@@ -715,7 +728,7 @@ class Island:
                     with open(last, encoding="utf-8") as fh:
                         clip = json.load(fh)
                     if time.time() - clip.get("at", 0) < 30 and os.path.exists(clip["path"]):
-                        clip["url"] = "https://clips.island/" + urllib.parse.quote(os.path.basename(clip["path"]))
+                        clip["url"] = clip_url(clip["path"])
                         self._js(f"window.__islandClip && window.__islandClip({json.dumps(clip)})")
             except (OSError, ValueError):
                 pass
@@ -1886,6 +1899,18 @@ def main():
                             os.makedirs(features.EXT_DIR, exist_ok=True)
                             core.SetVirtualHostNameToFolderMapping("ext.island", features.EXT_DIR,
                                                                    CoreWebView2HostResourceAccessKind.Allow)
+                            # SELF-HEALING: when the page's renderer dies (seen
+                            # 2026-10-03: the PC ran out of memory), WebView2
+                            # shows "This page is having a problem" for good.
+                            # Start a fresh island instead.
+                            if not getattr(island, "_crash_hooked", False):
+                                island._crash_hooked = True
+
+                                def failed(sender, args):
+                                    kind = str(getattr(args, "ProcessFailedKind", "?"))
+                                    extras.log("webview process failed:", kind, "-> restarting the island")
+                                    threading.Timer(1.0, island.restart_app).start()
+                                core.ProcessFailed += failed
                             done.append(1)
                     try:
                         ui_thread(island.window, attempt)

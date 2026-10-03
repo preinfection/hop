@@ -247,7 +247,7 @@
       case "reset_position": H.pos = { x: 50, top: 0 }; return { layout: setLayout({ ...L, scale: 1 }), position: H.pos };
       case "get_clipper": return { running: true, installed: true, folder: "E:\\Videos\\Clips", settings: H.clip || (H.clip = {
         watermark: true, cursor: true, toastInClips: true, islandInClips: true, fps: 60, quality: "high", defaultSeconds: 30, sounds: true, saveDir: "",
-        micTrack: false, gameNames: true, gameFolders: false }) };
+        micTrack: false, nameByGame: true, folderPerGame: true }) };
       case "set_clipper": Object.assign(H.clip, args[0]); return H.call(win, "get_clipper", []);
       case "start_clipper": case "pick_folder": return null;
       case "get_location": return { location: { name: "Toronto", label: "Toronto, Ontario, Canada" }, method: 2, school: 0 };
