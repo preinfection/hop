@@ -73,6 +73,9 @@
   #status { color: var(--faint); font-size: 12px; transition: color 200ms ease; }
   #status.saved { color: var(--green); }
   .spacer { flex: 1; }
+  .field.search { flex: 0 0 220px; padding: 6px 11px; }
+  section.no-match { display: none; }
+  .item.no-match { display: none; }
   .btn { border: 0; background: var(--row); padding: 7px 12px; border-radius: 8px; cursor: pointer; }
   .btn:hover { background: var(--hover); }
   .btn:disabled { opacity: 0.35; cursor: default; }
@@ -182,6 +185,7 @@
   </div>
   <span id="status">Loading…</span>
   <span class="spacer"></span>
+  <input class="field search" id="search" placeholder="Search settings…" autocomplete="off" spellcheck="false" />
   <button class="btn" id="undo" disabled title="Ctrl+Z">Undo</button>
 </header>
 
@@ -323,6 +327,10 @@
       </div>
     </section>
     <section>
+      <h2>Names, folders and microphone</h2>
+      <div class="card" data-clip-switches="naming"></div>
+    </section>
+    <section>
       <h2>Sounds</h2>
       <div class="card" data-clip-switches="sounds"></div>
     </section>
@@ -338,6 +346,15 @@
     today: ["Today", "Hijri date, weather, prayer times"],
     clips: ["Clips", "Your newest clips"],
     pc: ["PC", "CPU, GPU, RAM, disks, ping"],
+    agents: ["AI agents", "Claude Code and other agents: status, approvals, usage"],
+    timer: ["Timer", "Timer, stopwatch and focus (pomodoro)"],
+    calendar: ["Calendar", "Your next events, with Join buttons"],
+    alerts: ["Notifications", "Every pop-up you got, newest first"],
+    shelf: ["Shelf", "Files you parked on the island"],
+    notes: ["Notes", "A quick scratchpad"],
+    sports: ["Scores", "Live scores for your teams"],
+    prompter: ["Teleprompter", "Your script scrolls under the webcam"],
+    battery: ["Battery", "Charge, health and what uses it"],
   };
   // every on/off switch of the island, by section: [key, title, detail]
   const SWITCHES = {
@@ -360,6 +377,9 @@
               ["cursor", "Mouse cursor"], ["islandInClips", "Hop Island", "Off hides the island from clips AND from screenshots (Windows can't hide it from one only)"],
               ["toastInClips", "F8 pop-up", "The saving… card at the end of a clip"]],
     sounds: [["sounds", "Click when a clip is saved"]],
+    naming: [["gameNames", "Name clips after the game", "“Roblox 2026-10-03 21-05 (30s).mp4” instead of “clip …”"],
+             ["gameFolders", "A folder per game", "Clips\\Roblox, Clips\\Minecraft…"],
+             ["micTrack", "Record your microphone", "As its own audio track, so editors can mute or adjust it separately"]],
   };
   const TOC = [["s-style", "Style"], ["s-pages", "Pages"], ["s-player", "Player page"], ["s-pill", "Closed pill"], ["s-popups", "Pop-ups"],
                ["s-today", "Today page"], ["s-pc", "PC page"], ["s-place", "Location"], ["s-prayer", "Prayer"], ["s-look", "Look"], ["s-updates", "Updates"],
@@ -449,11 +469,12 @@
     if (active != null) chipOn = active;
     const ids = L.pages.filter((p) => !L.hidden.includes(p));
     chipOn = Math.min(chipOn, ids.length - 1);
-    $("chips").innerHTML = ids.map((id, i) => `<button class="chip ${i === chipOn ? "on" : ""}" data-i="${i}">${NAMES[id][0]}</button>`).join("");
+    $("chips").innerHTML = ids.map((id, i) => `<button class="chip ${i === chipOn ? "on" : ""}" data-i="${i}">${(NAMES[id] || [id])[0]}</button>`).join("");
   }
   $("chips").addEventListener("click", (e) => { const b = e.target.closest(".chip"); if (b) showPage(+b.dataset.i); });
   // hovering a section about one page shows that page in the preview
-  const SECTION_PAGE = { "s-player": "music", "s-today": "today", "s-pc": "pc" };
+  const SECTION_PAGE = { "s-player": "music", "s-today": "today", "s-pc": "pc", "s-agents": "agents", "s-calendar": "calendar",
+                         "s-sports": "sports", "s-prompter": "prompter" };
   document.querySelectorAll("#islandPanel section").forEach((sec) => sec.addEventListener("pointerenter", () => {
     const id = SECTION_PAGE[sec.id]; if (!id || !L) return;
     const i = L.pages.filter((p) => !L.hidden.includes(p)).indexOf(id);
@@ -597,6 +618,9 @@
     if (e.ctrlKey && e.key.toLowerCase() === "z" && !$("tab-island").hidden) { e.preventDefault(); undo(); }
   });
 
+  // settings-more.js (the newer sections) builds on these
+  window.__settings = { change: (p) => change(p), commit: (n, o) => commit(n, o), get L() { return L; }, get api() { return api; },
+                        send: (...a) => send(...a), status: (t, ok) => status(t, ok), esc, ready, SWITCHES, TOC, NAMES, SECTION_PAGE };
   function render() {
     document.documentElement.dataset.theme = L.appTheme || "system";
     brand();
@@ -606,6 +630,7 @@
     document.querySelectorAll("#tab-island input[type=checkbox][data-key]").forEach((c) => { c.checked = L[c.dataset.key] !== false; });
     $("scale").value = Math.round(L.scale * 100); $("scaleVal").textContent = Math.round(L.scale * 100) + "%";
     renderChips();
+    if (window.__settingsRender) window.__settingsRender(L);
   }
 
   // ================================================================ CLIPPER
@@ -729,6 +754,7 @@
   });
 })();
 </script>
+<script src="./settings-more.js"></script>
 <script src="./tip.js"></script>
 </body>
 </html>
