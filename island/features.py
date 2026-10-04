@@ -392,6 +392,18 @@ def focus_on():
         return False
 
 
+def net_fingerprint():
+    """Which adapters are up and their IPv4 addresses. Cheap, and unlike the
+    Wi-Fi name it isn't location data: Windows 11 lights the location icon
+    ("Network Command Shell") every time netsh reads the SSID, so wifi_ssid()
+    only runs when this changes (a network joined, dropped or switched)."""
+    import psutil
+    import socket
+    stats, addrs = psutil.net_if_stats(), psutil.net_if_addrs()
+    return tuple(sorted((name, st.isup, tuple(sorted(a.address for a in addrs.get(name, []) if a.family == socket.AF_INET)))
+                        for name, st in stats.items()))
+
+
 def wifi_ssid():
     """The connected Wi-Fi network's name, '' when not connected, None without Wi-Fi."""
     try:
@@ -675,6 +687,7 @@ class Features:
     def watch_loop(self):
         tick = 0
         ssid = wifi_ssid() if self.L().get("wifiPop") else None
+        net = net_fingerprint() if self.L().get("wifiPop") else None      # None: read the SSID at the next check
         focus = focus_on()
         dl = NewFiles(DOWNLOADS())
         shots = NewFiles(os.path.join(PICTURES(), "Screenshots"), (".png", ".jpg"))
@@ -706,11 +719,15 @@ class Features:
                 for p in shots.poll():
                     thumb, size = image_thumb(p)
                     self.js("snip", {"path": p, "name": os.path.basename(p), "thumb": thumb, "size": f"{size[0]} × {size[1]}" if size else ""})
-            if tick % max(4, int(10 * slow)) == 0 and L.get("wifiPop", True):
-                s = wifi_ssid()
-                if s is not None and ssid is not None and s != ssid:
-                    self.js("wifi", {"ssid": s})
-                ssid = s
+            if tick % max(4, int(10 * slow)) == 0:
+                if not L.get("wifiPop", True):
+                    net = None
+                elif (n := net_fingerprint()) != net:
+                    net = n
+                    s = wifi_ssid()
+                    if s is not None and ssid is not None and s != ssid:
+                        self.js("wifi", {"ssid": s})
+                    ssid = s
             if self.need.get("net") and tick % 4 == 0:
                 n = psutil.net_io_counters()
                 now = time.time()
