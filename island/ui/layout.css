@@ -57,11 +57,9 @@ html.boards .topbar { position: absolute; top: 12px; left: 20px; right: 20px; he
 .tile .wg-music .progress { grid-area: prog; gap: 8px; }
 .tile .wg-music .time { font: 500 10px/1 var(--isl-font); font-variant-numeric: tabular-nums; color: var(--t3); width: 34px; }
 .tile .wg-music .rail { height: 4px; }
-/* the volume button sits top right of the player; its slider drops DOWN under it */
+/* the volume button sits top right of the player; the island grows down
+   under it with the full-width volume row (island.css, as in 0.1.2) */
 .tile .wg-music .vol-btn { top: 0 !important; right: 0 !important; left: auto !important; bottom: auto !important; width: 26px; height: 26px; }
-.tile .wg-music .vol-row { top: 32px !important; bottom: auto !important; right: 0 !important; left: auto !important; width: 190px; height: 36px;
-  z-index: 5; transform: translateY(-6px); }
-.vol .tile .wg-music .vol-row { transform: none; }
 @container (max-height: 120px) {
   .wg-music { grid-template-columns: 52px minmax(0, 1fr) auto !important; grid-template-rows: 1fr !important; grid-template-areas: "art meta ctl" !important; }
   .wg-music .rec, .wg-music .head-art { width: 52px !important; height: 52px !important; }
@@ -274,3 +272,7 @@ html.motion-reduced .goal-word span { animation: none; opacity: 1; transform: no
 html.booting .island, html.booting .island * { transition: none !important; }
 html.booting .island { opacity: 0; }
 .island { transition-property: width, height, border-radius, transform, opacity; }
+/* the full-width volume row lines up with the widgets' edges */
+.boards .island > .vol-row { left: 26px; right: 26px; }
+/* grows just enough for the bar: as much room under it as above it */
+.boards .island { --vol-h: 28px; }

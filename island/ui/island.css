@@ -738,7 +738,7 @@ button svg { width: 24px; height: 24px; fill: currentColor; }
   position: relative;
   flex: 1 1 auto;
   height: 5px;
-  border-radius: 3px;
+  border-radius: 999px;               /* round at 5 px and at 7 px while held */
   background: rgba(255, 255, 255, 0.2);
   cursor: pointer;
   transition: height 140ms ease;
@@ -752,13 +752,15 @@ button svg { width: 24px; height: 24px; fill: currentColor; }
 .vol-rail:hover,
 .vol-rail.drag { height: 7px; }
 
+/* sized by width, not scaleX: a scaled fill squashes its rounded end */
 .vol-fill {
   position: absolute;
-  inset: 0;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
   border-radius: inherit;
   background: rgba(255, 255, 255, 0.9);
-  transform-origin: 0 50%;
-  transform: scaleX(1);
 }
 .vol-knob {
   position: absolute;

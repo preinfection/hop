@@ -610,7 +610,7 @@
 
   function paintVol() {
     const shown = vol.muted ? 0 : vol.level;
-    $("volFill").style.transform = `scaleX(${vol.level})`;
+    $("volFill").style.width = `${vol.level * 100}%`;
     $("volKnob").style.left = `${vol.level * 100}%`;
     $("volPct").textContent = Math.round(shown * 100);
     volRail.classList.toggle("muted-level", vol.muted);
@@ -671,7 +671,9 @@
 
   for (const el of [volBtn, volRow]) {
     el.addEventListener("mouseenter", openVol);
-    el.addEventListener("mouseleave", () => closeVol());
+    // on a widget page the row is far below the speaker: leaving the speaker
+    // doesn't close it (the mouseover below does, on another widget)
+    el.addEventListener("mouseleave", () => { if (!volBtn.closest(".tile")) closeVol(); });
     el.addEventListener("wheel", (e) => {        // scroll = 5 % steps
       e.preventDefault();
       vol.level = Math.min(1, Math.max(0, Math.round((vol.level + (e.deltaY < 0 ? 0.05 : -0.05)) * 100) / 100));
@@ -681,6 +683,16 @@
       sendVol(vol.level, unmute ? false : null);
     }, { passive: false });
   }
+  // on a widget page the speaker is top right of the player and the row is
+  // at the island's bottom: it stays open on the way down, and closes when
+  // the mouse moves onto another widget or the tabs
+  island.addEventListener("mouseover", (e) => {
+    const t = volBtn.closest(".tile");
+    if (!vol.open || !t || volRow.contains(e.target)) return;
+    const other = e.target.closest(".tile, .topbar");
+    if (other && other !== t) closeVol();
+  });
+  island.addEventListener("mouseleave", () => { if (volBtn.closest(".tile")) closeVol(); });
   volBtn.addEventListener("click", () => {
     vol.muted = !vol.muted;
     paintVol();
@@ -697,7 +709,7 @@
     if (!vol.dragging) return;
     vol.dragging = false;
     volRail.classList.remove("drag");
-    if (!volRow.matches(":hover") && !volBtn.matches(":hover")) closeVol();
+    if (!volRow.matches(":hover") && !(volBtn.closest(".tile") || volBtn).matches(":hover")) closeVol();
   };
   volRail.addEventListener("pointerup", endDrag);
   volRail.addEventListener("pointercancel", endDrag);

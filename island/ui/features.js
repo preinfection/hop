@@ -928,9 +928,14 @@
   full.appendChild(bar);
   // widget pages: the refresh and settings buttons move up here (no more
   // hunting at the edge); classic pages keep them where they were
+  const volRow = $("volRow"), volHome = volRow.parentElement;
   function placeButtons(on) {
     const home = on ? bar.querySelector(".tb-right") : full;
     for (const id of ["reload", "gear"]) { const b = $(id); if (b.parentElement !== home) home.appendChild(b); b.classList.toggle("tb", on); }
+    // the volume row: like 0.1.2, the whole island grows down and the row
+    // runs its full width under every widget (not inside the player tile)
+    const vHome = on ? island : volHome;
+    if (volRow.parentElement !== vHome) vHome.appendChild(volRow);
   }
   // snap: one screen -> top middle at once; several -> pick one, in the
   // order they sit (Left monitor / This monitor / Right monitor)
