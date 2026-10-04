@@ -257,7 +257,7 @@
       case "get_position": return H.pos || (H.pos = { x: 50, top: 0 });
       case "set_position": H.pos = { x: args[0] ?? (H.pos || {}).x ?? 50, top: args[1] ?? (H.pos || {}).top ?? 0 }; return H.pos;
       case "reset_position": H.pos = { x: 50, top: 0 }; return { layout: setLayout({ ...L, scale: 1 }), position: H.pos };
-      case "get_clipper": return { running: true, installed: true, folder: "E:\\Videos\\Clips", settings: H.clip || (H.clip = {
+      case "get_clipper": return { running: true, installed: true, folder: "C:\\Users\\you\\Videos\\Hop Clips", settings: H.clip || (H.clip = {
         watermark: true, cursor: true, toastInClips: true, islandInClips: true, fps: 60, quality: "high", defaultSeconds: 30, sounds: true, saveDir: "",
         micTrack: false, nameByGame: true, folderPerGame: true }) };
       case "set_clipper": Object.assign(H.clip, args[0]); return H.call(win, "get_clipper", []);

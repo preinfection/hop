@@ -33,7 +33,9 @@ def app(browser, sandbox):
         if os.path.exists(f):
             os.remove(f)
     isl = host.Island()
-    isl.set_layout({"pageMode": "pages"})          # these tests are about the classic pages (boards: test_boards.py)
+    # these tests are about the classic pages (boards: test_boards.py), with the
+    # prayer alarm on (prayer times are opt-in; the alarm tests need it)
+    isl.set_layout({"pageMode": "pages", "prayerAlarm": True})
     u32 = ctypes.windll.user32
     u32.CreateWindowExW.restype = ctypes.c_void_p
     hwnd = u32.CreateWindowExW(0x80, "STATIC", "hop-test-island", 0x80000000, 100, 10, 360, 196, None, None, None, None)
@@ -83,16 +85,17 @@ def test_switch_off_and_on(app, key):
     pg, frame, _ = app
     box = pg.locator(f"#tab-island input[data-key={key}]")
     box.scroll_into_view_if_needed()
+    start = saved()[key]                                       # some start off now (prayer times are opt-in)
     box.click(force=True)
     pg.wait_for_function(f"document.getElementById('status').textContent.startsWith('Saved')")
-    assert saved()[key] is False
+    assert saved()[key] is (not start)
     if key in FLAG:
-        frame.wait_for_function(f"document.getElementById('island').classList.contains('{FLAG[key]}')")
+        frame.wait_for_function(f"document.getElementById('island').classList.contains('{FLAG[key]}') === {str(start).lower()}")
     box.click(force=True)
     pg.wait_for_timeout(250)
-    assert saved()[key] is True
+    assert saved()[key] is start
     if key in FLAG:
-        assert FLAG[key] not in classes(frame)
+        assert (FLAG[key] in classes(frame)) is (not start)
 
 
 # ================================================================ slots and theme
