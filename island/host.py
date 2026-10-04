@@ -1373,11 +1373,22 @@ class Island:
                     inside, entered_at = True, entered_at or 0.0
                 rest = L.get("hoverDelay", 250) / 1000.0
                 wants = (clicked or held or peek) if by_click else (now - entered_at >= rest if entered_at is not None else False)
+                # SMOOTH OPEN: the window's area grows while the mouse rests on
+                # the pill, BEFORE the animation. Growing it in the same moment
+                # made Windows repaint the whole window during the first frames
+                # (a visible hitch at the start of every open).
+                if inside and not is_open and not self.expanded and (playing or held or peek) and not quiet:
+                    ui_thread(self.window, lambda: self.set_region(True))
+                    self._pre_open, closed_at = True, None
+                elif not inside and not is_open and getattr(self, "_pre_open", False) and not dragging:
+                    self._pre_open = False                                  # rested, then left without opening
+                    if self.expanded:
+                        ui_thread(self.window, lambda: self.set_region(False))
                 if inside and not is_open and (playing or held or peek) and not (quiet and not (held or peek or clicked)) and wants:
                     left_at, closed_at = None, None
                     if not self.expanded:
                         ui_thread(self.window, lambda: self.set_region(True))
-                    is_open = True
+                    is_open, self._pre_open = True, False
                     self.window.run_js("window.__islandHover && window.__islandHover(true)")
                 elif is_open and (inside or dragging):
                     left_at = None

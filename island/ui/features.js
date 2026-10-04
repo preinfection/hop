@@ -93,10 +93,12 @@
     island.style.setProperty("--isl-glow", L.glow ? "0 4px 22px -2px color-mix(in srgb, var(--accent) 55%, transparent)" : "0 0 0 0 transparent");
     st.setProperty("--isl-font", FONTS[L.font] || FONTS.inter);
     const k = 100 / (L.speed || 100);
-    st.setProperty("--dur", Math.round((L.anim === "subtle" ? 300 : 420) * k) + "ms");
+    // a calmer open: a little longer, and the movement spread over the whole
+    // time (the old curve did most of it in the first ~100 ms: fast and jumpy)
+    st.setProperty("--dur", Math.round((L.anim === "subtle" ? 360 : 520) * k) + "ms");
     const over = L.anim === "full" ? 1 + (L.bounce / 100) * 0.4 : 1;           // 0..100 -> no overshoot .. a big spring
-    st.setProperty("--ease-w", `cubic-bezier(0.32, ${over.toFixed(2)}, 0.55, 1)`);
-    st.setProperty("--spring", `cubic-bezier(0.32, ${over.toFixed(2)}, 0.55, 1)`);
+    st.setProperty("--ease-w", `cubic-bezier(0.25, ${over.toFixed(2)}, 0.3, 1)`);
+    st.setProperty("--spring", `cubic-bezier(0.25, ${over.toFixed(2)}, 0.3, 1)`);
     root.classList.toggle("motion-reduced", L.anim === "reduced");
     island.classList.toggle("no-sr", !L.shuffleRepeat);
     let css = document.getElementById("userCss");

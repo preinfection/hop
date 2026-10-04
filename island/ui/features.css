@@ -9,9 +9,9 @@
   --isl-font: "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   --r-closed: 19px;
   --r-open: 40px;
-  --dur: 420ms;
-  --ease-w: cubic-bezier(0.32, 1.18, 0.55, 1);   /* width: a little spring */
-  --ease-h: cubic-bezier(0.22, 1, 0.36, 1);      /* height: no overshoot, so the bottom edge never wobbles */
+  --dur: 520ms;
+  --ease-w: cubic-bezier(0.25, 1.18, 0.3, 1);    /* width: a little spring */
+  --ease-h: cubic-bezier(0.25, 1, 0.3, 1);       /* height: no overshoot, so the bottom edge never wobbles */
   --isl-ring: 0 0 0 0 transparent;
   --isl-glow: 0 0 0 0 transparent;
   --hop-orange: #ff9f0a;

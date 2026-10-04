@@ -439,7 +439,7 @@ button.gring:hover::before { background: #111; }
   opacity: 1;
   transform: scale(1);
   pointer-events: auto;
-  transition: opacity 220ms ease 90ms, transform 380ms var(--spring) 40ms;
+  transition: opacity 260ms ease 130ms, transform 440ms var(--spring) 60ms;   /* in once the shape is mostly there */
 }
 
 .head {
