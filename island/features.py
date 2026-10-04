@@ -192,7 +192,9 @@ class AgentHub:
 
     def public(self):
         order = {"ask": 0, "work": 1, "done": 2, "idle": 3}
-        ss = sorted(self.sessions.values(), key=lambda s: (order.get(s["status"], 9), -s["at"]))
+        with self.lock:                                    # sync() and the hook threads change it meanwhile
+            ss = [{k: s[k] for k in ("id", "tool", "name", "status", "detail", "at")} for s in self.sessions.values()]
+        ss.sort(key=lambda s: (order.get(s["status"], 9), -s["at"]))
         return {"sessions": [{k: s[k] for k in ("id", "tool", "name", "status", "detail")} for s in ss],
                 "usage": self.usage if self.f.L().get("usagePill") else None}
 
@@ -227,9 +229,12 @@ class AgentHub:
             return {}
         ev, sid = d.get("hook_event_name", ""), d.get("session_id", "") or "?"
         cwd = d.get("cwd") or ""
-        s = self.sessions.setdefault(sid, {"id": sid, "tool": "claude", "name": os.path.basename(cwd.rstrip("\\/")) or "Claude",
-                                           "status": "idle", "detail": "", "cwd": cwd, "at": time.time()})
-        s["at"] = time.time()
+        # under the lock: sync() adds and drops sessions on its own thread (the
+        # rest of handle() can wait minutes for an answer, so only this part)
+        with self.lock:
+            s = self.sessions.setdefault(sid, {"id": sid, "tool": "claude", "name": os.path.basename(cwd.rstrip("\\/")) or "Claude",
+                                               "status": "idle", "detail": "", "cwd": cwd, "at": time.time()})
+            s["at"] = time.time()
         tool, inp = d.get("tool_name", ""), d.get("tool_input") or {}
         out = {}
         if ev == "SessionStart":
@@ -287,7 +292,8 @@ class AgentHub:
                 if L.get("agentSound"):
                     self.f.sound("chime")
         elif ev == "SessionEnd":
-            self.sessions.pop(sid, None)
+            with self.lock:
+                self.sessions.pop(sid, None)
         self._push()
         return out
 
