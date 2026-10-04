@@ -80,6 +80,29 @@ def test_moves_to_the_chosen_screen_and_remembers_it(isl, monkeypatch):
     assert RIGHT[0] <= x2 and x2 + w2 <= RIGHT[2]
 
 
+def test_right_monitor_stays_on_the_right_with_the_real_reflow(isl, monkeypatch):
+    """The user's report (2026-10-04): with a monitor plugged in, "Right
+    monitor" did nothing. snap_to moved the island there, then reflow() ->
+    place_initial() put it back on the position saved earlier (top middle of
+    the laptop). The fixture skips reflow, so this runs the real one."""
+    monkeypatch.setattr(isl, "reflow", host.Island.reflow.__get__(isl))
+    monkeypatch.setattr(isl, "set_region", lambda *_: None)
+
+    def area():                                                         # the made-up screen the window's middle is on
+        x, y, w, h = isl.rect()
+        return next((s["work"] for s in isl._screens if s["work"][0] <= x + w / 2 < s["work"][2]), LAPTOP)
+    monkeypatch.setattr(isl, "work_area", area)
+    isl.cfg["windowPosition"] = {"cx": 960.0, "y": 12}                 # saved earlier, on the laptop
+    assert isl.snap_to(1)
+    x, y, w, h = isl.rect()
+    assert RIGHT[0] <= x and x + w <= RIGHT[2], (x, w)
+    assert abs((x + w / 2) - (RIGHT[0] + RIGHT[2]) / 2) <= 1
+    assert RIGHT[0] <= host.read_config()["windowPosition"]["cx"] <= RIGHT[2]
+    assert isl.snap_to(0)                                               # and back
+    x, _, w, _ = isl.rect()
+    assert LAPTOP[0] <= x and x + w <= LAPTOP[2]
+
+
 def test_a_screen_that_is_gone_is_not_used(isl, monkeypatch):
     isl.cfg["windowPosition"] = {"cx": 2880, "y": 0}                   # saved on the right screen...
     isl._screens[:] = isl._screens[:1]                                 # ...which was unplugged

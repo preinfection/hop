@@ -967,7 +967,8 @@ class Features:
 
             def move():
                 _, _, w, h = self.i.rect()
-                self.i.set_bounds(l + (r - l - w) / 2, t + self.i.top_gap() * self.i.scale(), w, h)
+                self.i.set_bounds(l + (r - l - w) / 2, t + self.i.top_gap() * self.i.scale(), w, h, (l, t, r, b))
+                self.i.cfg["windowPosition"] = None             # or reflow puts it back on the old spot
                 self.i.reflow()
             host.ui_thread(self.i.window, move)
 

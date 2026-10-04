@@ -1192,7 +1192,13 @@ class Island:
 
         def go():
             _, _, w, h = self.rect()
-            self.set_bounds(l + (r - l - w) / 2, t, w, h)          # onto that screen first...
+            # onto that screen first: kept inside IT (without the area,
+            # set_bounds keeps the window inside the screen it's on now, so
+            # it never left the main screen)...
+            self.set_bounds(l + (r - l - w) / 2, t, w, h, (l, t, r, b))
+            # ...forget the old spot, or reflow's place_initial puts it right
+            # back there ("Right monitor" did nothing, 2026-10-04)...
+            self.cfg["windowPosition"] = None
             self.reflow()                                          # ...then its size for that screen's scale
             self.recenter(choose=False)
             x, y, w2, _ = self.rect()                              # remembered, so a fresh start comes back here
