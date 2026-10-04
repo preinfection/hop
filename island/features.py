@@ -376,8 +376,7 @@ class AgentHub:
     def usage_loop(self):
         """Claude plan usage (5-hour and weekly), only when switched on: read
         with Claude Code's own sign-in from ~/.claude/.credentials.json."""
-        # every minute, and soon after a reply finishes (that's when it moves),
-        # never more than once in 20 s. "Too many requests" (429): the last
+        # every 15 s (the user's pick). "Too many requests" (429): the last
         # numbers stay up and it waits as long as asked, or 5 minutes, doubling
         # to 30, until a read works again.
         last, hold, backoff = 0.0, 0.0, 0
@@ -386,7 +385,7 @@ class AgentHub:
             now = time.time()
             if not on:
                 last = 0.0                                  # switched on again: fetch at once
-            elif now >= hold and (now - last >= 60 or (self.usage_soon and now - last >= 20)):
+            elif now >= hold and now - last >= USAGE_EVERY:
                 last, self.usage_soon = now, False
                 try:
                     self.usage = claude_usage()
@@ -400,6 +399,9 @@ class AgentHub:
                 except Exception as e:
                     extras.log("usage", repr(e))
             time.sleep(3)
+
+
+USAGE_EVERY = 15        # seconds between plan usage reads (backs off on 429, see usage_backoff)
 
 
 def usage_backoff(n, retry_after=None):
