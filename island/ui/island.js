@@ -601,7 +601,9 @@
 
   // ---- volume (Spotify's own, via the host). Hovering the speaker grows the
   // island down over the slider row; leaving the speaker and the row closes it.
-  const VOL_H = 42;                               // island.css --vol-h
+  // how far the island grows: island.css --vol-h (42), less on widget pages
+  // (layout.css): the host counts exactly that much as "on the island"
+  const volH = () => parseFloat(getComputedStyle(island).getPropertyValue("--vol-h")) || 42;
   const vol = { level: 1, muted: false, open: false, dragging: false };
   const volBtn = $("volBtn"), volRow = $("volRow"), volRail = $("volRail");
   let volCloseTimer = 0, volShrinkTimer = 0, volSend = 0, volPending = null;
@@ -629,7 +631,7 @@
     clearTimeout(volShrinkTimer);
     if (vol.open || !isOpen) return;
     vol.open = true;
-    api.setExtra(VOL_H);                          // the host counts the grown part as "on the island"
+    api.setExtra(volH());                         // the host counts the grown part as "on the island"
     island.classList.add("vol");
     readVol();
   }

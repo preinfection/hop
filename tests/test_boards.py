@@ -129,6 +129,7 @@ def test_volume_grows_the_whole_island_like_0_1_2(board_app):
     pg, frame, _ = board_app
     open_preview(pg, frame)
     h0 = frame.evaluate("document.querySelector('.island').getBoundingClientRect().height")
+    pg.evaluate("window.__ex = []; addEventListener('message', (e) => e.data && e.data.name === 'set_extra' && __ex.push(e.data.args[0]))")
     frame.evaluate("document.querySelector('.tile #volBtn').dispatchEvent(new MouseEvent('mouseenter'))")
     frame.wait_for_timeout(700)
     r = frame.evaluate("""(() => { const b = s => document.querySelector(s).getBoundingClientRect();
@@ -139,6 +140,9 @@ def test_volume_grows_the_whole_island_like_0_1_2(board_app):
     assert r["row"]["top"] >= r["tiles"] and r["row"]["bottom"] <= r["isl"]["bottom"]
     assert r["row"]["width"] >= r["isl"]["width"] - 60                             # the whole width
     assert abs((r["row"]["left"] - r["isl"]["left"]) - (r["isl"]["right"] - r["row"]["right"])) <= 1
+    # the host is told exactly how far it grew (it was always 42, 14 px too much: ultrareview)
+    assert pg.evaluate("__ex") == [28]
+    assert abs(r["isl"]["height"] - h0 - 28) <= 1
 
 
 def test_scrolling_the_time_works_in_every_mode(board_app):
