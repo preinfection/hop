@@ -542,6 +542,7 @@
   // which one you're looking at (a running one has a dot on its tab). The
   // pill shows the one started last.
   const POMO = { work: 25 * 60000, break: 5 * 60000, long: 15 * 60000 };
+  const pomoLen = (ph) => (T && T.pomoLen && T.pomoLen[ph]) || POMO[ph];       // a length scrolled to sticks
   const fresh = () => ({
     view: "timer", last: "",
     timer: { set: 300000, left: 300000, endAt: 0, running: false },
@@ -591,7 +592,7 @@
   function startTimer(m = T.view) {
     const c = T[m];
     if (m === "watch") c.startAt = now();
-    else { if (c.left <= 0) c.left = m === "pomo" ? POMO[c.phase] : c.set; c.endAt = now() + c.left; }
+    else { if (c.left <= 0) c.left = m === "pomo" ? pomoLen(c.phase) : c.set; c.endAt = now() + c.left; }
     c.running = true; T.last = m; save(); paintTimer(); liveTick();
   }
   function pauseTimer(m = T.view) {
@@ -604,7 +605,7 @@
     const c = T[m];
     c.running = false;
     if (m === "watch") c.elapsed = 0;
-    else if (m === "pomo") Object.assign(c, { phase: "work", round: 1, left: POMO.work });
+    else if (m === "pomo") Object.assign(c, { phase: "work", round: 1, left: pomoLen("work") });
     else c.left = c.set;
     save(); paintTimer(); liveTick();
   }
@@ -615,7 +616,7 @@
     if (m === "pomo") {
       if (c.phase === "work") { c.phase = c.round % 4 === 0 ? "long" : "break"; title = "Focus done"; sub = "Time for a break"; }
       else { c.phase = "work"; c.round = c.round % 4 + 1; title = "Break over"; sub = `Round ${c.round}`; }
-      c.left = POMO[c.phase];
+      c.left = pomoLen(c.phase);
     }
     save(); paintTimer();
     popup("timer", `${chip("alarm", "var(--hop-orange)")}<div class="ct"><div class="t">${title}</div><div class="s">${sub}</div>
@@ -631,11 +632,27 @@
     const b = e.target.closest("button[data-m]"); if (!b) return;
     T.view = b.dataset.m; save(); paintTimer();
   });
+  // scroll the big time: a minute up or down, in every mode, running or not
+  // (timer and focus: time left; stopwatch: time counted, never below 0)
+  let wheelAt = 0;
   $("tmBig").addEventListener("wheel", (e) => {
     e.preventDefault();
-    if (T.view !== "timer" || T.timer.running) return;
-    T.timer.set = T.timer.left = Math.max(60000, Math.min(99 * 60000, T.timer.left + (e.deltaY < 0 ? 60000 : -60000)));
-    save(); paintTimer();
+    if (Math.abs(e.deltaY) < 4 || performance.now() - wheelAt < 60) return;      // one notch, one minute
+    wheelAt = performance.now();
+    const m = T.view, c = T[m], step = e.deltaY < 0 ? 60000 : -60000, MAX = 99 * 60000;
+    if (m === "watch") {
+      const was = msOf("watch"), to = Math.max(0, was + step);
+      if (c.running) c.startAt -= to - was; else c.elapsed = to;
+    } else if (c.running) {
+      const left = c.endAt - now();
+      c.endAt = now() + Math.max(1000, Math.min(MAX, left + step));
+    } else {
+      const full = m === "timer" ? c.set : pomoLen(c.phase);
+      c.left = Math.max(60000, Math.min(MAX, (c.left > 0 ? c.left : full) + step));
+      if (m === "timer") c.set = c.left;
+      else if (Math.abs(full - (c.left - step)) < 1000) T.pomoLen = { ...(T.pomoLen || {}), [c.phase]: c.left };   // at the start of a round: its length from now on
+    }
+    save(); paintTimer(); liveTick();
   }, { passive: false });
   setInterval(() => {
     for (const m of ["timer", "pomo"]) if (T[m].running && now() >= T[m].endAt) timerDone(m);

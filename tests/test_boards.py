@@ -141,6 +141,35 @@ def test_volume_grows_the_whole_island_like_0_1_2(board_app):
     assert abs((r["row"]["left"] - r["isl"]["left"]) - (r["isl"]["right"] - r["row"]["right"])) <= 1
 
 
+def test_scrolling_the_time_works_in_every_mode(board_app):
+    """Only the timer took the wheel; the stopwatch and focus ignored it."""
+    pg, frame, _ = board_app
+    open_preview(pg, frame)
+    frame.evaluate("document.querySelectorAll('#tabs .tab')[0].click()")
+    big = "document.getElementById('tmBig').textContent"
+
+    def wheel(dy):
+        frame.evaluate(f"document.getElementById('tmBig').dispatchEvent(new WheelEvent('wheel', {{deltaY: {dy}, bubbles: true, cancelable: true}}))")
+        frame.wait_for_timeout(120)
+
+    for m, start, up2, down1 in (("timer", "5:00", "7:00", "6:00"), ("watch", "0:00", "2:00", "1:00"), ("pomo", "25:00", "27:00", "26:00")):
+        frame.evaluate(f"document.querySelector('#tmModes button[data-m={m}]').click()")
+        assert frame.evaluate(big) == start
+        wheel(-100); wheel(-100)
+        assert frame.evaluate(big) == up2, m
+        wheel(100)
+        assert frame.evaluate(big) == down1, m
+    assert frame.evaluate("__hopTimer.state().pomoLen.work") == 26 * 60000            # the next rounds are 26 min too
+    # running: the end moves, the clock keeps going
+    frame.evaluate("document.querySelector('#tmModes button[data-m=timer]').click()")
+    frame.evaluate("__hopTimer.start(5 * 60000)")
+    wheel(-100)
+    left = frame.evaluate("(() => { const s = __hopTimer.state(); return s.timer.endAt - Date.now(); })()")
+    assert 5.8 * 60000 < left <= 6 * 60000
+    page_before = frame.evaluate("[...document.querySelectorAll('#tabs .tab')].findIndex(t => t.classList.contains('on'))")
+    assert page_before == 0                                                         # scrolling the time never turns the page
+
+
 def test_play_has_no_circle(board_app):
     _, frame, _ = board_app
     assert frame.evaluate("getComputedStyle(document.querySelector('.tile #play')).backgroundColor") in ("rgba(0, 0, 0, 0)", "transparent")
