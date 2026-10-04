@@ -31,6 +31,7 @@ import struct
 import subprocess
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import wave
@@ -376,21 +377,39 @@ class AgentHub:
         """Claude plan usage (5-hour and weekly), only when switched on: read
         with Claude Code's own sign-in from ~/.claude/.credentials.json."""
         # every minute, and soon after a reply finishes (that's when it moves),
-        # never more than once in 20 s
-        last = 0.0
+        # never more than once in 20 s. "Too many requests" (429): the last
+        # numbers stay up and it waits as long as asked, or 5 minutes, doubling
+        # to 30, until a read works again.
+        last, hold, backoff = 0.0, 0.0, 0
         while True:
             on = self.f.L().get("usagePill")
             now = time.time()
             if not on:
                 last = 0.0                                  # switched on again: fetch at once
-            elif now - last >= 60 or (self.usage_soon and now - last >= 20):
+            elif now >= hold and (now - last >= 60 or (self.usage_soon and now - last >= 20)):
                 last, self.usage_soon = now, False
                 try:
                     self.usage = claude_usage()
+                    backoff = 0
                     self._push()
+                except urllib.error.HTTPError as e:
+                    if e.code == 429:
+                        backoff += 1
+                        hold = now + usage_backoff(backoff, e.headers.get("Retry-After") if e.headers else None)
+                    extras.log("usage", repr(e))
                 except Exception as e:
                     extras.log("usage", repr(e))
             time.sleep(3)
+
+
+def usage_backoff(n, retry_after=None):
+    """Seconds to wait after the n-th "too many requests" in a row: what the
+    server asked for (Retry-After, in seconds), else 5 min doubling to 30."""
+    try:
+        asked = float(retry_after)
+    except (TypeError, ValueError):
+        asked = 0
+    return min(1800.0, max(asked, 300.0 * 2 ** (max(1, n) - 1)))
 
 
 def _proc_start(pid):

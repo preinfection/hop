@@ -173,6 +173,14 @@ def test_sessions_follow_claude_codes_own_list(tmp_path):
     assert not hub.sync(root)                                                           # nothing new: no push
 
 
+def test_usage_backs_off_when_told_too_many_requests():
+    """A 429 from the usage server: wait what it asks, else 5 min doubling to 30."""
+    assert [features.usage_backoff(n) for n in (1, 2, 3, 4, 9)] == [300, 600, 1200, 1800, 1800]
+    assert features.usage_backoff(1, "900") == 900                                   # Retry-After wins when longer
+    assert features.usage_backoff(1, "10") == 300 and features.usage_backoff(1, "soon") == 300
+    assert features.usage_backoff(2, "99999") == 1800
+
+
 def test_open_session_without_hooks_yet_is_listed(tmp_path):
     root = str(tmp_path)
     _session_file(root, os.getpid(), "quiet", r"C:\code\mutate", "idle")
