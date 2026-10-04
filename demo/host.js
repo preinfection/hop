@@ -207,7 +207,16 @@
       case "restart_app": islandWin && islandWin.location.reload(); return true;
       case "update_answer": log("update:", args[0] ? "now" : "later"); return true;
       case "install_update": {
-        let p = 0; const t = setInterval(() => { p += 0.12; ev("update", { latest: "0.1.4", state: "downloading", progress: Math.min(1, p) }); if (p >= 1) { clearInterval(t); log("would run HopSetup-0.1.4.exe /SILENT and restart"); } }, 250);
+        // the whole thing, as on a PC: download, install (Hop closes), Hop starts again on the new version
+        let p = 0; const t = setInterval(() => {
+          p += 0.12; ev("update", { latest: "0.1.4", state: "downloading", progress: Math.min(1, p) });
+          if (p < 1) return;
+          clearInterval(t);
+          setTimeout(() => ev("update", { latest: "0.1.4", state: "installing" }), 400);
+          setTimeout(() => { log("(demo) HopSetup-0.1.4.exe /SILENT: Hop closes, installs, starts again");
+            if (islandWin) { islandWin.__hop.hideCard(); islandWin.document.getElementById("island").style.opacity = "0"; } }, 2600);
+          setTimeout(() => { if (islandWin) { islandWin.document.getElementById("island").style.opacity = ""; js("__islandUpdated", "0.1.4"); } }, 4600);
+        }, 250);
         return true;
       }
       // the newer calls

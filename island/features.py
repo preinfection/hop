@@ -1179,6 +1179,9 @@ class Features:
                             self.js("update", {"latest": latest, "state": "downloading", "progress": got / total})
                 self.js("update", {"latest": latest, "state": "downloading", "progress": 1})
                 # the installer closes both apps, installs over them and starts them again
+                # (installer\hop.iss: the silent-install [Run] entries)
+                self.js("update", {"latest": latest, "state": "installing"})
+                time.sleep(1.2)                                  # the card says so before the island closes
                 subprocess.Popen([path, "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART"], creationflags=NO_WINDOW)
             except Exception as e:
                 extras.log("install update", repr(e))

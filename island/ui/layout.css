@@ -254,3 +254,14 @@ html.boards .topbar { left: 24px; right: 24px; }
    the margin it used before snapped in one frame) */
 .island.pdot-on .sl-r { margin-right: 0 !important; transform: translateX(-9px); }
 .mini .sl-r { transition: transform 320ms cubic-bezier(.22, 1, .36, 1) !important; }
+
+/* ---- "GOAAAAAAAAAAAAAAL!": the letters spawn in one after another (the A's
+   stretch the shout), then a green wave flows across them */
+.goal-word { background: none !important; -webkit-background-clip: border-box !important; background-clip: border-box !important;
+  color: #fff !important; animation: none !important; white-space: nowrap; letter-spacing: -0.01em; font-size: 19px; font-weight: 800; }
+.goal-word span { display: inline-block; opacity: 0; transform: translateY(6px) scale(0.6);
+  animation: gl-in 360ms cubic-bezier(.34, 1.56, .64, 1) calc(var(--i) * 32ms + 250ms) forwards,
+             gl-wave 900ms ease-in-out calc(var(--i) * 45ms + 1000ms) 2; }
+@keyframes gl-in { to { opacity: 1; transform: none; } }
+@keyframes gl-wave { 0%, 100% { color: #fff; transform: none; } 45% { color: #7ef0a0; transform: translateY(-3px); text-shadow: 0 0 10px rgba(48, 209, 88, 0.6); } }
+html.motion-reduced .goal-word span { animation: none; opacity: 1; transform: none; }

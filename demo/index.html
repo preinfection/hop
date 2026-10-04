@@ -65,6 +65,10 @@
 <div class="scrim" onclick="__demoHost.closeSettings()"></div>
 <div class="settings"><div class="bar"><span>Hop settings (the real settings app)</span><button onclick="__demoHost.closeSettings()">Close</button></div><iframe id="settingsFrame" title="Hop settings"></iframe></div>
 <script src="/demo/host.js"></script>
-<script>__demoHost.ready.then(() => { document.getElementById("islandFrame").src = "/island/ui/index.html"; });</script>
+<script>__demoHost.ready.then(() => { document.getElementById("islandFrame").src = "/island/ui/index.html"; });
+// the demo always shows the newest code: when a file changes, the page reloads
+(() => { let v = null;
+  setInterval(() => fetch("/demo/version").then((r) => r.json()).then((d) => { if (v !== null && d.v !== v) location.reload(); v = d.v; }).catch(() => {}), 2000);
+})();</script>
 </body>
 </html>

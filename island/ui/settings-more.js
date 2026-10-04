@@ -228,9 +228,16 @@
     Object.assign(f.style, { width: w + "px", height: h + "px", transformOrigin: "50% 0",
       transform: `translateX(-50%) translateY(${y.toFixed(1)}px) scale(${k.toFixed(3)})` });
   }
+  // it never moves while the mouse is on it (hovering the volume button grows
+  // the island; re-zooming then slid the button out from under the pointer)
+  let held = false;
   window.addEventListener("message", (e) => {
-    if (e.data && e.data.t === "isl" && e.source === $("pv").contentWindow) { isl = e.data; fitPreview(S.L); }
+    if (!(e.data && e.data.t === "isl" && e.source === $("pv").contentWindow)) return;
+    isl = e.data;
+    if ($("pv").parentElement.matches(":hover")) { held = true; return; }
+    fitPreview(S.L);
   });
+  $("pv").parentElement.addEventListener("pointerleave", () => { if (held) { held = false; fitPreview(S.L); } });
   window.addEventListener("resize", () => S.L && fitPreview(S.L));
   function buildToc() {
     toc.innerHTML = [...panel.querySelectorAll("section")].filter((s) => !s.hidden).map((s) => `<a href="#${s.id}">${esc(s.querySelector("h2").textContent)}</a>`).join("");

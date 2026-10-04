@@ -755,7 +755,7 @@
         const word = soccer ? "GOAL" : "SCORE";
         const ball = ICON({ soccer: "ball-football", basketball: "ball-basketball", football: "ball-american-football", baseball: "ball-baseball" }[m.sport || "soccer"] || "ball-football", 18);
         popup("sports", `<div class="goal-crest">${logo ? `<img src="${esc(logo)}" alt="" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="crest-fb" hidden>${ball}</span>` : `<span class="crest-fb">${ball}</span>`}<span class="ball">${ball}</span></div>
-          <div class="ct"><div class="goal-word">${word}!</div>
+          <div class="ct"><div class="goal-word">${[...(soccer ? "GO" + "A".repeat(14) + "L!" : word + "!")].map((ch, i) => `<span style="--i:${i}">${ch}</span>`).join("")}</div>
           <div class="goal-line"><span class="${homeScored ? "hit" : ""}">${esc(m.home)}</span><span class="sc">${m.hs} – ${m.as}</span><span class="${homeScored ? "" : "hit"}">${esc(m.away)}</span></div>
           <div class="goal-sub">${esc(m.status)} · ${esc(m.league)}</div></div>`, 340, 92, () => {
             document.querySelector(".card").classList.add("goal");
@@ -1203,10 +1203,12 @@
     },
     reminder: (r) => simpleCard("reminder", r.icon || "bell", r.bg || "#a5a3ff", r.title, r.text, r.app || "Reminder"),
     update: (u) => {                                     // an update that can install itself (the original card's look)
-      const dl = u.state === "downloading", pct = Math.round((u.progress || 0) * 100);
-      H.showCard(`${chip("download", "#0a84ff")}<div class="ct"><div class="t">${dl ? "Downloading update" : "Update available"}</div>
-        <div class="s">${dl ? `Hop v${esc(u.latest)} · ${pct}%` : `Hop v${esc(u.latest)} is ready`}</div>
-        ${dl ? `<div class="prog"><i style="width:${pct}%"></i></div>` : '<div class="btns"><button class="pbtn go" id="uIns">Install now</button><button class="pbtn" id="uLater2">Later</button></div>'}</div>`,
+      const dl = u.state === "downloading", inst = u.state === "installing", pct = Math.round((u.progress || 0) * 100);
+      const title = inst ? "Installing update" : dl ? "Downloading update" : "Update available";
+      const sub = inst ? `Hop v${esc(u.latest)} · Hop restarts on its own` : dl ? `Hop v${esc(u.latest)} · ${pct}%` : `Hop v${esc(u.latest)} is ready`;
+      H.showCard(`${chip("download", "#0a84ff")}<div class="ct"><div class="t">${title}</div><div class="s">${sub}</div>
+        ${inst ? '<div class="prog busy"><i></i></div>' : dl ? `<div class="prog"><i style="width:${pct}%"></i></div>`
+          : '<div class="btns"><button class="pbtn go" id="uIns">Install now</button><button class="pbtn" id="uLater2">Later</button></div>'}</div>`,
         300, 100, 0, () => {
           if ($("uIns")) $("uIns").onclick = () => call("install_update");
           if ($("uLater2")) $("uLater2").onclick = () => { api.updateAnswer(false); H.hideCard(); };

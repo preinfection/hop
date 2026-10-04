@@ -77,6 +77,11 @@ Name: "{userstartup}\Hop Clipper"; Filename: "{app}\Clipper\HopClipper.exe"; Wor
 [Run]
 Filename: "{app}\Clipper\HopClipper.exe"; Description: "Start Hop Clipper"; Components: clipper; Flags: nowait postinstall skipifsilent
 Filename: "{app}\Island\HopIsland.exe"; Description: "Start Hop Island"; Components: island; Flags: nowait postinstall skipifsilent
+; An update installed from the island runs silently: the entries above skip
+; silent installs, so these start both apps again (or Hop stayed closed until
+; the next sign-in after "Install now").
+Filename: "{app}\Clipper\HopClipper.exe"; Components: clipper; Flags: nowait runasoriginaluser; Check: WizardSilent
+Filename: "{app}\Island\HopIsland.exe"; Components: island; Flags: nowait runasoriginaluser; Check: WizardSilent
 
 [UninstallRun]
 Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM HopIsland.exe"; Flags: runhidden; RunOnceId: "KillIsland"

@@ -75,7 +75,7 @@ FLAG = {"lyricLine": "no-lyric", "progress": "no-progress", "controls": "no-cont
         "todayHijri": "no-hij", "todayEvents": "no-evts", "todayWeather": "no-wx", "todayPrayers": "no-strip",
         "gCpu": "no-g-cpu", "gGpu": "no-g-gpu", "gRam": "no-g-ram", "gDiskC": "no-g-diskC", "gDiskE": "no-g-diskE",
         "gPing": "no-g-ping"}
-SWITCHES = [k for k in host.BOOL_KEYS]
+SWITCHES = [k for k in host.BOOL_KEYS if k != "artColor"]   # artColor: the Accent row (album / my colour) replaced that switch
 
 
 @pytest.mark.parametrize("key", SWITCHES)

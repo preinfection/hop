@@ -70,6 +70,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self._send(open(os.path.join(ROOT, "island", "bridge.js"), encoding="utf-8").read(), "text/javascript")
         if path == "/island/ui/config.js":
             return self._send("window.__layout = " + json.dumps(demo_layout()) + ";\n", "text/javascript")
+        if path == "/demo/version":                     # the newest change to the island's files (the page reloads on it)
+            newest = 0.0
+            for d in ("island/ui", "island", "demo"):
+                for f in os.listdir(os.path.join(ROOT, d)):
+                    fp = os.path.join(ROOT, d, f)
+                    if os.path.isfile(fp) and not f.endswith(".pyc"):
+                        newest = max(newest, os.path.getmtime(fp))
+            return self._send(json.dumps({"v": newest}), "application/json")
         if path == "/demo/layout.json":
             return self._send(json.dumps({"layout": demo_layout(), "spec": {k: list(v) if isinstance(v, tuple) else v
                                                                             for k, v in options.SPEC.items()},
