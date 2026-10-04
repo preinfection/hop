@@ -168,8 +168,10 @@
         <div class="item"><input class="field" id="lfKey" placeholder="API key"><input class="field" id="lfSecret" type="password" placeholder="Shared secret"><button class="btn" id="lfGo">Connect</button></div>
         <div class="item"><div class="label"><span id="lfState">Make a free API account at last.fm/api/account/create</span></div></div>`),
     ]],
-    ["s-backup", "Backup & help", "s-reset", [
-      R.html(`<div class="item"><div class="label"><b>Back up settings</b><span>Everything, to a file on your Desktop</span></div><button class="btn" id="bkExport">Export</button><button class="btn" id="bkImport">Import…</button></div>
+    ["s-backup", "Startup, backup & help", "s-reset", [
+      R.html(`<div class="item"><div class="label"><b>Start with Windows</b><span>Hop Island opens when you sign in</span></div>
+          <label class="sw"><input type="checkbox" id="startup"><i></i></label></div>
+        <div class="item"><div class="label"><b>Back up settings</b><span>Everything, to a file on your Desktop</span></div><button class="btn" id="bkExport">Export</button><button class="btn" id="bkImport">Import…</button></div>
         <div class="item"><div class="label"><b>Diagnostics</b><span>Hop's logs in one zip on your Desktop, for a bug report</span></div><button class="btn" id="diag">Make zip</button></div>`),
     ]],
   ];
@@ -186,6 +188,30 @@
     const ref = $(after);
     ref ? ref.after(sec) : panel.appendChild(sec);
   }
+  // SHORTER: the newer rows join the sections they belong to (no "Player: more")
+  for (const [from, into, first] of [["s-playermore", "s-player"], ["s-todaymore", "s-today"], ["s-prayermore", "s-prayer"],
+                                     ["s-slots", "s-pill"], ["s-popsettings", "s-popups"], ["s-style", "s-shape", true]]) {
+    const a = $(from), b = $(into);
+    if (!a || !b) continue;
+    const cards = [...a.querySelectorAll(":scope > .card")];
+    cards.forEach((c, k) => { c.style.marginTop = "10px"; if (first) b.querySelector("h2").after(...(k ? [] : cards)); else b.appendChild(c); });
+    if (first) { cards.forEach((c, k) => (c.style.marginTop = k ? "10px" : "")); const nx = cards[cards.length - 1].nextElementSibling; if (nx && nx.classList.contains("card")) nx.style.marginTop = "10px"; }
+    a.remove();
+  }
+  { const sh = $("s-shape"); if (sh) sh.querySelector("h2").textContent = "Style, shape & size"; }
+  // "Album colours" is the same thing as Accent: From the album / My colour
+  { const x = panel.querySelector('input[data-key="artColor"]'); if (x) x.closest(".item").remove(); }
+  // the per-pop-up table starts folded: the common ones, then "Show all"
+  { const pt = $("popTable");
+    if (pt) {
+      const more = document.createElement("div");
+      more.className = "item";
+      more.innerHTML = '<button class="btn" id="popAll">Show every pop-up</button><span class="hint">Time, sound and on / off for each kind</span>';
+      pt.after(more);
+      pt.classList.add("folded");
+      more.querySelector("button").onclick = () => { const f = pt.classList.toggle("folded"); more.querySelector("button").textContent = f ? "Show every pop-up" : "Show fewer"; };
+    } }
+
   // the table of contents and the search follow the new sections
   const toc = $("toc");
   // the live preview: the island's real window, ZOOMED to whatever the island
@@ -247,9 +273,14 @@
     earbuds: "bluetooth", headphones: "bluetooth", move: "position", drag: "position", position: "position across the screen",
     top: "gap from the top", notch: "style shape notch", pill: "style shape pill", widget: "pages widgets", page: "pages widgets",
     calendar: "calendar ical", meeting: "calendar join", sport: "sports scores teams", football: "sports scores teams", soccer: "sports scores",
-    lastfm: "last.fm scrobble", scrobble: "last.fm", extension: "extensions", plugin: "extensions", profile: "profiles", preview: "live preview",
+    lastfm: "last.fm scrobble", scrobble: "last.fm", lyrics: "lyric", lyric: "lyric",
+    transparent: "opacity", transparency: "opacity", "see-through": "opacity", border: "outline", outline: "outline",
+    shadow: "glow", blur: "glow opacity", smaller: "size scale width", bigger: "size scale width", larger: "size scale width",
+    tiny: "size scale", huge: "size scale", startup: "start with windows", autostart: "start with windows", boot: "start with windows", login: "start with windows", gaming: "game mode", games: "game mode", fullscreen: "game mode", extension: "extensions", plugin: "extensions", profile: "profiles", preview: "live preview",
     open: "opens hover click", hover: "opens hover rest", click: "opens click", scroll: "mouse wheel", wheel: "mouse wheel",
   };
+  const STOP = new Set(["a", "an", "the", "is", "are", "to", "of", "in", "on", "off", "for", "it", "my", "me", "i", "and", "or", "how", "do",
+    "where", "what", "when", "can", "turn", "make", "set", "change", "while", "with", "this", "that", "be", "get", "show", "want"]);
   const words = (t) => t.toLowerCase().normalize("NFKD").replace(/[^a-z0-9.'+ -]/g, " ").split(/\s+/).filter((w) => w.length > 1);
   function lev(a, b) {                              // edit distance, small words only
     if (Math.abs(a.length - b.length) > 3) return 9;
@@ -265,22 +296,27 @@
   function score(query, text) {
     const T = words(text);
     if (!T.length) return 0;
-    const Q = words(query);
+    let Q = words(query);
+    const content = Q.filter((q) => !STOP.has(q));
+    if (content.length) Q = content;                // "where is the clock" is about the clock
     if (!Q.length) return 0;
-    let total = 0;
+    let total = 0, top = 0;
     for (const q of Q) {
       let best = Math.max(0, ...T.map((w) => wordScore(q, w)));
       const syn = SYN[q] || SYN[q.replace(/s$/, "")];
       // related words count, but only as written (no typo-matching on them: "fill" must not find "pill")
-      if (syn) best = Math.max(best, 0.85 * Math.max(0, ...words(syn).map((sq) => Math.max(0, ...T.map((w) => wordScore(sq, w, false))))));
+      if (syn) best = Math.max(best, 0.85 * Math.max(0, ...words(syn).filter((sq) => !STOP.has(sq) && sq.length > 2)
+        .map((sq) => Math.max(0, ...T.map((w) => wordScore(sq, w, false))))));
       total += best;
+      top = Math.max(top, best);
     }
-    return total / Q.length;
+    return 0.6 * top + 0.4 * (total / Q.length);   // the best-matching word counts most
   }
   function searchFor(q) {
     q = q.trim();
     const secs = [...panel.querySelectorAll("section")];
     $("searchNote").hidden = true;
+    $("searchNote").innerHTML = "";
     if (!q) {
       secs.forEach((sec) => { sec.classList.remove("no-match"); sec.querySelectorAll(".item").forEach((i) => i.classList.remove("no-match", "near")); });
       return;
@@ -290,9 +326,11 @@
       if (sec.hidden) continue;
       const title = sec.querySelector("h2").textContent;
       for (const it of sec.querySelectorAll(".card > .item, .card > div > .item")) {
-        // its title, description and choices as separate words (textContent glues "notificationsDiscord")
-        const text = [...it.querySelectorAll(".label b, .label span, .seg button")].map((e) => e.textContent).join(" ") || it.textContent;
-        const sc = Math.max(score(q, text), 0.9 * score(q, title));
+        // its title counts most, then its description and choices, then the section's name
+        // (as separate words: textContent glues "notificationsDiscord")
+        const name = [...it.querySelectorAll(".label b")].map((e) => e.textContent).join(" ");
+        const rest = [...it.querySelectorAll(".label span, .seg button")].map((e) => e.textContent).join(" ") || (name ? "" : it.textContent);
+        const sc = Math.max(score(q, name), 0.85 * score(q, rest), 0.8 * score(q, title));
         hits.push([sc, it, sec]);
       }
     }
@@ -300,8 +338,7 @@
     const near = !show.length;
     if (near) {                                     // nothing really matches: the closest few, marked as such
       show = hits.filter((h) => h[0] > 0.15).sort((a, b) => b[0] - a[0]).slice(0, 6);
-      $("searchNote").hidden = false;
-      $("searchNote").textContent = show.length ? `No setting called “${q}”. Closest matches:` : `Nothing like “${q}” in the settings.`;
+
     }
     const on = new Set(show.map((h) => h[1]));
     for (const sec of secs) {
@@ -314,8 +351,20 @@
       });
       sec.classList.toggle("no-match", !any);
     }
-    const first = show.sort((a, b) => b[0] - a[0])[0];
-    if (first) first[2].scrollIntoView({ block: "start" });
+    // the best few, as buttons on top (the page itself stays in its order)
+    const best = show.sort((a, b) => b[0] - a[0]).slice(0, 3);
+    const note = $("searchNote");
+    const nm = (it) => ((it.querySelector(".label b") || it).textContent || "").trim().slice(0, 40);
+    note.hidden = !best.length && !near;
+    note.innerHTML = (near ? `<span>No setting called “${esc(q)}”. Closest:</span>` : "<span>Best matches:</span>") +
+      best.map(([, it], k) => `<button class="chip ${k ? "" : "on"}" data-k="${k}">${esc(nm(it))}</button>`).join("");
+    if (near && !best.length) note.innerHTML = `<span>Nothing like “${esc(q)}” in the settings.</span>`;
+    note.querySelectorAll("[data-k]").forEach((btn) => btn.onclick = () => {
+      const it = best[+btn.dataset.k][1];
+      it.scrollIntoView({ block: "center", behavior: "smooth" });
+      it.classList.remove("flash"); void it.offsetWidth; it.classList.add("flash");
+    });
+    if (best[0]) best[0][1].scrollIntoView({ block: "center" });
   }
   let searchT = 0;
   $("search").addEventListener("input", () => { clearTimeout(searchT); searchT = setTimeout(() => searchFor($("search").value), 120); });
@@ -370,6 +419,12 @@
     dim("idleAfter", L.idleHide); dim("idleStyle", L.idleHide); dim("quietFrom", L.quiet); dim("jumuahMins", L.jumuah);
     dim("monitorIndex", L.monitor === "fixed");
     if (document.activeElement !== $("customCss")) $("customCss").value = L.customCss || "";
+    {   // a light background is shown darker (the island's text is light): say so under the picker
+      const n = parseInt(L.bg.slice(1), 16), r = (n >> 16) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+      const light = (Math.max(r, g, b) + Math.min(r, g, b)) / 2 > 0.22;
+      const row = panel.querySelector('[data-row="bg"] .label span');
+      if (row) row.textContent = light ? "Shown a little darker on the island, so its text stays readable" : "The island's colour";
+    }
     renderPrio(L); renderPopTable(L); renderLists(L); renderAlarmChips(L); renderExtensions(L); renderBoards(L);
     fitPreview(L);
     buildToc();
@@ -379,14 +434,14 @@
   const SIZE_NAMES = { s: "Small", w: "Wide", t: "Tall", b: "Big", f: "Full width" };
   const CELLS = { s: [1, 1], w: [2, 1], t: [1, 2], b: [2, 2], f: [4, 1] };
   const WIDGET_SIZES = {
-    music: ["b", "w", "f"], today: ["w", "b", "s"], clips: ["w", "b", "f"], pc: ["w", "f", "b"], agents: ["b", "w", "t", "f"],
-    timer: ["w", "s", "b"], calendar: ["b", "w", "t"], alerts: ["b", "t", "w"], shelf: ["w", "b", "f"], notes: ["b", "w", "t"],
-    sports: ["w", "b"], prompter: ["b", "f", "w"], battery: ["w", "s", "b"],
+    music: ["b", "w", "f"], today: ["t", "w", "b", "s"], prayer: ["t", "w", "b"], weather: ["t", "s", "w"], clips: ["w", "b", "f"],
+    pc: ["w", "f", "b"], agents: ["b", "w", "t", "f"], timer: ["t", "w", "s", "b"], calendar: ["b", "w", "t"], alerts: ["b", "t", "w"],
+    shelf: ["w", "b", "f"], notes: ["b", "w", "t", "f"], sports: ["w", "b"], prompter: ["b", "f", "w"], battery: ["w", "s", "b"],
   };
-  const WNAME = { music: "Now playing", today: "Today: date, weather, prayers", clips: "Recent clips", pc: "PC: CPU, GPU, RAM, ping",
+  const WNAME = { music: "Now playing", today: "Today: the date, Hijri date, countdowns", prayer: "Next prayer", weather: "Weather", clips: "Recent clips", pc: "PC: CPU, GPU, RAM, ping",
                   agents: "AI agents", timer: "Timer", calendar: "Calendar", alerts: "Notifications", shelf: "Shelf", notes: "Notes",
                   sports: "Scores", prompter: "Teleprompter", battery: "Battery" };
-  const WCOLOR = { music: "#ff375f", today: "#ffd479", clips: "#0a84ff", pc: "#30d158", agents: "#d97757", timer: "#ff9f0a",
+  const WCOLOR = { music: "#ff375f", today: "#ffd479", prayer: "#ffd479", weather: "#64d2ff", clips: "#0a84ff", pc: "#30d158", agents: "#d97757", timer: "#ff9f0a",
                    calendar: "#ff453a", alerts: "#5e5ce6", shelf: "#64d2ff", notes: "#ffd60a", sports: "#32d74b", prompter: "#bf5af2", battery: "#30d158" };
   const allWidgets = () => [...Object.keys(WIDGET_SIZES), ...((extra && extra.extensions) || []).map((x) => "ext-" + x.id)];
   const sizesOf = (w) => WIDGET_SIZES[w] || ["b", "w", "f", "s"];
@@ -423,10 +478,13 @@
           <button class="mv" data-bm="-1" data-b="${i}" ${i === 0 ? "disabled" : ""} title="Move page up">▲</button>
           <button class="mv" data-bm="1" data-b="${i}" ${i === B.length - 1 ? "disabled" : ""} title="Move page down">▼</button>
           <button class="btn warn" data-bdel="${i}" ${B.length < 2 ? "disabled" : ""} title="Delete page">Delete</button></div>
-        <div class="bmap">${b.widgets.map((x) => `<i class="m-${x.s}" style="--c:${WCOLOR[x.w] || "#8e8e93"}">${esc(wname(x.w).split(":")[0])}</i>`).join("")}</div>
+        <div class="bmap" style="grid-template-rows: repeat(2, 34px)">${b.widgets.map((x) => `<i class="m-${x.s}" style="--c:${WCOLOR[x.w] || "#8e8e93"}">${esc(wname(x.w).split(":")[0])}</i>`).join("")}</div>
         ${b.widgets.map((x, j) => `<div class="item wrow"><span class="wdot" style="background:${WCOLOR[x.w] || "#8e8e93"}"></span>
           <div class="label"><b>${esc(wname(x.w))}</b></div>
-          <div class="seg">${sizesOf(x.w).map((z) => `<button data-ws="${z}" data-b="${i}" data-j="${j}" class="${z === x.s ? "on" : ""}" title="${CELLS[z][0]}×${CELLS[z][1]} cells">${SIZE_NAMES[z]}</button>`).join("")}</div>
+          <div class="seg">${sizesOf(x.w).map((z) => {
+            const ok = z === x.s || fits(b.widgets.map((y, k) => (k === j ? { ...y, s: z } : y)));
+            return `<button data-ws="${z}" data-b="${i}" data-j="${j}" class="${z === x.s ? "on" : ""}" ${ok ? "" : "disabled"} title="${ok ? `${CELLS[z][0]}×${CELLS[z][1]} cells` : "No room on this page"}">${SIZE_NAMES[z]}</button>`;
+          }).join("")}</div>
           <button class="mv" data-wm="-1" data-b="${i}" data-j="${j}" ${j === 0 ? "disabled" : ""}>▲</button>
           <button class="mv" data-wm="1" data-b="${i}" data-j="${j}" ${j === b.widgets.length - 1 ? "disabled" : ""}>▼</button>
           <button class="btn warn" data-wdel="${i}" data-j="${j}" title="Remove from this page">×</button></div>`).join("")}
@@ -441,11 +499,11 @@
     if (t.id === "boardAdd") setBoards((B) => B.push({ name: `Page ${B.length + 1}`, widgets: [{ w: "notes", s: "b" }] }));
     else if (t.dataset.bm) setBoards((B) => { const [x] = B.splice(i, 1); B.splice(i + +t.dataset.bm, 0, x); });
     else if (t.dataset.bdel != null) setBoards((B) => B.splice(+t.dataset.bdel, 1));
-    else if (t.dataset.ws) setBoards((B) => {
-      const b = B[i], old = b.widgets[j].s;
-      b.widgets[j].s = t.dataset.ws;
-      if (!fits(b.widgets)) { b.widgets[j].s = old; S.status("No room for that size on this page"); }
-    });
+    else if (t.dataset.ws) {
+      const ws = S.L.boards[i].widgets.map((y, k) => (k === j ? { ...y, s: t.dataset.ws } : y));
+      if (!fits(ws)) { S.status("No room for that size on this page"); return; }   // nothing saved, and it says so
+      setBoards((B) => { B[i].widgets[j].s = t.dataset.ws; });
+    }
     else if (t.dataset.wm) setBoards((B) => { const ws = B[i].widgets; const [x] = ws.splice(j, 1); ws.splice(j + +t.dataset.wm, 0, x); });
     else if (t.dataset.wdel != null) setBoards((B) => { B[+t.dataset.wdel].widgets.splice(j, 1); if (!B[+t.dataset.wdel].widgets.length) B.splice(+t.dataset.wdel, 1); });
   });
@@ -636,6 +694,13 @@
     $("lfPass").value = "";
     if (r && r.connected) { extra.lastfm = r; renderExtra(); } else $("lfState").textContent = (r && r.error) || "Couldn't connect";
   });
+  S.ready.then(() => S.api.get_startup()).then((on) => { $("startup").checked = !!on; });
+  $("startup").addEventListener("change", async (e) => {
+    e.stopPropagation();
+    S.status("Saving…");
+    $("startup").checked = !!(await S.api.set_startup($("startup").checked));
+    S.status($("startup").checked ? "Hop Island will start with Windows" : "Hop Island won't start with Windows", true);
+  });
   $("bkExport").addEventListener("click", async () => { const p = await S.api.export_settings(); S.status(p ? "Saved to " + p : "Couldn't save", !!p); });
   $("bkImport").addEventListener("click", async () => { const L = await S.api.import_settings(); if (L) { await S.commit(L); S.status("Settings imported", true); } });
   $("diag").addEventListener("click", async () => { $("diag").textContent = "Zipping…"; const p = await S.api.diagnostics(); $("diag").textContent = "Make zip"; S.status(p ? "Saved to " + p : "Couldn't make it", !!p); });
@@ -657,16 +722,21 @@
     #popTable .item .label span { font-size: 12px; }
     .item input[type=range]:disabled { opacity: 0.35; }
     .stage iframe { transition: transform 320ms cubic-bezier(.3, 1.1, .5, 1); }
-    .search-note { margin: 0 2px 12px; font-size: 13px; color: var(--dim); }
+    .search-note { position: sticky; top: -22px; z-index: 3; margin: -22px -26px 14px; padding: 12px 26px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+      font-size: 13px; color: var(--dim); background: var(--bg); border-bottom: 1px solid var(--line); }
+    .item.flash { animation: flash 1.2s ease; }
+    @keyframes flash { 0%, 40% { background: color-mix(in srgb, var(--blue) 22%, transparent); } 100% { background: transparent; } }
     .item.near { box-shadow: inset 3px 0 0 var(--blue); }
     .board { border-top: 1px solid var(--line); }
     .board:first-child { border-top: 0; }
     .board .bhead .bname { max-width: 220px; font-weight: 600; }
     .board .wrow { padding-left: 22px; }
+    #popTable.folded .item:nth-child(n + 6) { display: none; }
+    .board .seg button:disabled { opacity: 0.35; cursor: not-allowed; }
     .board .wdot { width: 9px; height: 9px; border-radius: 3px; flex: none; }
     .bmap { display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(2, 34px); grid-auto-flow: dense; gap: 4px;
       margin: 2px 14px 8px; padding: 6px; border-radius: 12px; background: #000; }
-    .bmap i { font-style: normal; font-size: 11px; font-weight: 600; color: #fff; border-radius: 7px; display: grid; place-items: center;
+    .bmap i { font-style: normal; font-size: 12px; font-weight: 600; color: #fff; border-radius: 7px; display: grid; place-items: center;
       background: color-mix(in srgb, var(--c) 34%, #1c1c1e); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 55%, transparent);
       overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding: 0 6px; }
     .bmap .m-s { grid-column: span 1; } .bmap .m-w { grid-column: span 2; } .bmap .m-t { grid-row: span 2; }

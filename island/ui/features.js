@@ -51,12 +51,18 @@
   // "Copy as CSS" (settings): the island's whole look as CSS anyone can paste
   // into Custom CSS; !important so it wins over the settings it replaces
   function themeCss() {
-    const st = root.style, keys = ["--w", "--h", "--w-wide", "--open-w", "--open-h", "--r-closed", "--r-open", "--isl-bg", "--isl-ring",
-                                   "--isl-glow", "--isl-font", "--dur", "--ease-w", "--spring"];
-    const Lx = L(), NL = "\n";
-    const vars = keys.filter((k) => st.getPropertyValue(k)).map((k) => `  ${k}: ${st.getPropertyValue(k).trim()} !important;`);
-    return ["/* Hop Island theme: paste into Settings > Look > Custom CSS */", ":root {", ...vars, "}",
-            Lx.accentMode === "custom" ? `.island { --accent: ${Lx.accentColor} !important; }` : "",
+    // (the closed width is left out: the pill must still widen for activities)
+    const Lx = L(), NL = "\n", get = (el, k) => el.style.getPropertyValue(k).trim();
+    const rootVars = ["--h", "--open-w", "--open-h", "--r-closed", "--r-open", "--isl-font", "--dur", "--ease-w", "--spring"]
+      .filter((k) => get(root, k)).map((k) => `  ${k}: ${get(root, k)} !important;`);
+    const islVars = ["--isl-bg", "--isl-ring", "--isl-glow"].filter((k) => get(island, k)).map((k) => `  ${k}: ${get(island, k)} !important;`);
+    if (Lx.accentMode === "custom") islVars.push(`  --accent: ${Lx.accentColor} !important;`);
+    const shape = Lx.style === "notch"
+      ? `.island { border-radius: 0 0 var(--r-closed) var(--r-closed) !important; }${NL}.island.open { border-radius: 0 0 var(--r-open) var(--r-open) !important; }`
+      : `.island { border-radius: var(--r-closed) !important; }${NL}.island.open { border-radius: var(--r-open) !important; }`;
+    return [`/* Hop Island theme (${Lx.style === "notch" ? "notch" : "pill"} style): paste into Settings > Profiles & themes > Custom CSS */`,
+            ":root {", ...rootVars, "}", ".island {", ...islVars, "}", shape,
+            Lx.anim === "reduced" ? ".island, .island * { transition-duration: 120ms !important; animation: none !important; }" : "",
             Lx.customCss || ""].filter(Boolean).join(NL) + NL;
   }
   window.addEventListener("message", (e) => { if (e.data && e.data.t === "themecss") e.source.postMessage({ t: "themecss", css: themeCss() }, "*"); });
@@ -70,7 +76,8 @@
     st.setProperty("--open-w", L.openW + "px");
     st.setProperty("--open-h", L.openH + "px");
     const rc = L.radiusClosed >= 0 ? L.radiusClosed : notch ? 10 : Math.round(L.pillH / 2);
-    const ro = L.radiusOpen >= 0 ? L.radiusOpen : notch ? 24 : 40;
+    const ro = L.radiusOpen >= 0 ? L.radiusOpen : 24;                 // one rounding for the open island and every card
+    st.setProperty("--r-card", Math.min(ro, 30) + "px");
     st.setProperty("--r-closed", rc + "px");
     st.setProperty("--r-open", ro + "px");
     const a = L.bgOpacity / 100;
@@ -79,11 +86,11 @@
     const [r, g, b] = darkEnough(rgb(L.bg));
     const dark = `rgba(${r * 0.55 | 0}, ${g * 0.55 | 0}, ${b * 0.55 | 0}, ${a})`;
     const base = `rgba(${r}, ${g}, ${b}, ${a})`;
-    st.setProperty("--isl-bg", L.bgStyle === "gradient" ? `linear-gradient(180deg, ${base}, ${dark})`
+    island.style.setProperty("--isl-bg", L.bgStyle === "gradient" ? `linear-gradient(180deg, ${base}, ${dark})`
       : L.bgStyle === "tint" ? `linear-gradient(180deg, color-mix(in srgb, var(--accent) 22%, ${base}), ${base})`
       : base);
-    st.setProperty("--isl-ring", L.border ? `inset 0 0 0 1px ${rgba(L.borderColor, L.borderOpacity / 100)}` : "0 0 0 0 transparent");
-    st.setProperty("--isl-glow", L.glow ? "0 4px 22px -2px color-mix(in srgb, var(--accent) 55%, transparent)" : "0 0 0 0 transparent");
+    island.style.setProperty("--isl-ring", L.border ? `inset 0 0 0 1px ${rgba(L.borderColor, L.borderOpacity / 100)}` : "0 0 0 0 transparent");
+    island.style.setProperty("--isl-glow", L.glow ? "0 4px 22px -2px color-mix(in srgb, var(--accent) 55%, transparent)" : "0 0 0 0 transparent");
     st.setProperty("--isl-font", FONTS[L.font] || FONTS.inter);
     const k = 100 / (L.speed || 100);
     st.setProperty("--dur", Math.round((L.anim === "subtle" ? 300 : 420) * k) + "ms");
@@ -150,7 +157,7 @@
   }
   const slotted = (v) => [L().slotLeft, L().slotCenter, L().slotRight].includes(v);
   function paintSlots() {
-    if (slotted("timer")) NODES.timer.textContent = timer.running || timer.left > 0 || timer.mode === "watch" && timer.elapsed > 0 ? fmtTimer() : "–:––";
+    if (slotted("timer")) NODES.timer.textContent = liveClock() ? fmtTimer(liveClock()) : "–:––";
     if (slotted("agents")) {
       const ss = state.agents.slice(0, 4);
       NODES.agents.innerHTML = ss.length ? ss.map((s) => `<i class="${s.status}"></i>`).join("") : '<i></i>';
@@ -226,8 +233,11 @@
         const r = ramadanText();
         if (r) { text = r; color = "var(--hop-amber)"; break; }
       }
-      if (kind === "timer" && (timer.running || (timer.mode === "watch" && timer.elapsed > 0 && timer.running))) { text = fmtTimer(); color = "var(--hop-orange)"; break; }
-      if (kind === "agent" && state.agents.some((s) => s.status === "ask")) { text = "Agent waiting"; color = "var(--hop-orange)"; pulse = true; break; }
+      if (kind === "timer" && liveClock()) { text = fmtTimer(liveClock()); color = "var(--hop-orange)"; break; }
+      // only once the card about it is gone (dismissed or missed) and it still waits: never in the card's way
+      if (kind === "agent" && state.agents.some((s) => s.status === "ask") && !H.cardOn() && now() - (state.askSince || 0) > 4000) {
+        text = "Agent waiting"; color = "var(--hop-orange)"; pulse = true; break;
+      }
       if (kind === "focus" && state.focus) { text = "Focus"; color = "var(--hop-purple)"; break; }
     }
     if (live.textContent !== text) live.textContent = text;
@@ -300,6 +310,15 @@
     if (P && !P.on) return;
     if (quietNow()) return;
     clearTimeout(actTimer);
+    {   // how wide it really is: lay the content out off to the side and measure it
+      const probe = document.createElement("div");
+      probe.className = "act-view act-probe";
+      probe.innerHTML = html;
+      island.appendChild(probe);
+      const need = [...probe.children].reduce((n, c) => n + c.scrollWidth, 0) + 12 * 2 + 14;
+      probe.remove();
+      w = Math.min(Math.max(w, need), L().openW || 400);
+    }
     w = Math.max(w, fitW || 0, parseFloat(getComputedStyle(root).getPropertyValue("--w")) || 0);
     island.classList.remove("act-out");
     H.growPill(w).then(() => {
@@ -325,12 +344,12 @@
     agents: `<div class="ph"><span>Agents</span><span class="sub" id="agSub"></span></div>
       <div class="rows scrolls" id="agRows"></div><div class="usage" id="agUsage" hidden></div>`,
     timer: `<div class="tm-modes" id="tmModes"><button data-m="timer" class="on" title="Timer">${ICON("alarm", 13)}<span>Timer</span></button><button data-m="watch" title="Stopwatch">${ICON("clock-hour-4", 13)}<span>Stopwatch</span></button><button data-m="pomo" title="Focus">${ICON("moon", 13)}<span>Focus</span></button></div>
-      <div class="tm-big scrolls" id="tmBig" title="Scroll to change">5:00</div><div class="tm-sub" id="tmSub"></div>
+      <div class="tm-big" id="tmBig" title="Scroll to change">5:00</div><div class="tm-sub" id="tmSub"></div>
       <div class="tm-row" id="tmRow"></div>`,
     calendar: `<div class="ph"><span id="calHead">Today</span><button class="lnk" id="calOpen">Open calendar</button></div><div class="rows scrolls" id="calRows"></div>`,
     alerts: `<div class="ph"><span>Notifications</span><button class="lnk" id="alClear">Clear</button></div><div class="rows scrolls" id="alRows"></div>`,
     shelf: `<div class="ph"><span>Shelf</span><span class="sub" id="shSub">Drop files on the island</span></div><div class="sh-items" id="shItems"></div>`,
-    notes: `<div class="ph"><span>Notes</span><span class="sub" id="ntSub">Saved</span></div><div class="notes scrolls" id="notes" contenteditable="plaintext-only" spellcheck="false"></div>`,
+    notes: `<div class="ph"><span>Notes</span><span class="sub" id="ntSub">Saved</span></div><div class="notes scrolls" id="notes" contenteditable="plaintext-only" spellcheck="false" data-ph="Type anything…"></div>`,
     sports: `<div class="ph"><span>Scores</span><span class="sub" id="spSub"></span></div><div id="spRows" class="scrolls"></div>`,
     prompter: `<div class="pr-view" id="prView"><div class="pr-text" id="prText"></div></div>
       <div class="pr-bar"><button class="lnk" id="prPlay">Play</button><button class="lnk" id="prBack">Restart</button><span id="prInfo"></span></div>`,
@@ -362,7 +381,7 @@
   function paintPrayerW() {
     const pr = H.prayers();
     if (!$("pnName")) return;
-    $("pnCity").textContent = city;
+    $("pnCity").textContent = "";
     if (!pr || !pr.today) { $("pnName").textContent = "–"; $("pnIn").textContent = "Pick your city in settings"; $("pnList").innerHTML = ""; return; }
     const names = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"], d = new Date(now());
     const at = (hmS, plus = 0) => { const [h, m] = hmS.split(":").map(Number); const x = new Date(d); x.setDate(x.getDate() + plus); x.setHours(h, m, 0, 0); return x; };
@@ -372,7 +391,7 @@
     $("pnName").textContent = next;
     $("pnAt").textContent = timeFmt.format(when);
     $("pnIn").textContent = mins >= 60 ? `in ${Math.floor(mins / 60)} h ${mins % 60} min` : `in ${mins} min`;
-    $("pnList").innerHTML = names.map((n) => `<div class="${n === next ? "nx" : ""}"><span>${n}</span><b>${timeFmt.format(at(pr.today[n])).replace(/\s?[AP]M/i, "")}</b></div>`).join("");
+    $("pnList").innerHTML = names.map((n) => `<div class="${n === next ? "nx" : ""}"><span>${n}</span><b>${timeFmt.format(at(pr.today[n]))}</b></div>`).join("");
   }
   function paintDate() {
     const box = WG.today; if (!box) return;
@@ -458,16 +477,28 @@
           document.querySelector(".card").classList.add("tall");
           const fb = $("aFb");
           // every new line makes the box (and the card) taller, up to the room the island has
-          fb.addEventListener("input", () => {
-            fb.style.height = "auto"; fb.style.height = fb.scrollHeight + "px";
-            const plan = document.querySelector(".card .plan");
+          const plan = document.querySelector(".card .plan");
+          const grow = () => {
+            const c = document.querySelector(".card");
             plan.style.maxHeight = "";
-            H.fitCard();
-            requestAnimationFrame(() => {             // out of room: the plan text gives way (whole lines), the buttons stay
-              const c = document.querySelector(".card"), over = c.scrollHeight - c.clientHeight;
-              if (over > 0) plan.style.maxHeight = Math.max(32, Math.floor((plan.clientHeight - over) / 16) * 16 + 12) + "px";
-            });
-          });
+            fb.style.overflowY = "hidden";
+            fb.style.height = "auto";
+            const want = fb.scrollHeight;
+            fb.style.height = want + "px";
+            H.fitCard(true);                           // taller only: typing never makes the card wider
+            // the card's room is fixed now: what the buttons need is measured, not guessed
+            const pb = parseFloat(getComputedStyle(c).paddingBottom) || 0, btns = c.querySelector(".btns");
+            const over = () => btns.getBoundingClientRect().bottom - (c.getBoundingClientRect().bottom - pb);   // the buttons keep the bottom padding
+            if (over() > 0) {                          // out of room: the plan text shrinks, whole lines, to 2 at least
+              const ph = plan.offsetHeight, extra = ph - plan.clientHeight + 12;     // its padding / border
+              plan.style.maxHeight = Math.max(2 * 16 + 12, Math.floor((ph - over() - extra) / 16) * 16 + 12) + "px";
+            }
+            if (over() > 0) {                          // then the box stops growing and scrolls inside itself
+              fb.style.height = Math.max(26, fb.offsetHeight - over()) + "px";
+              fb.style.overflowY = "auto";
+            }
+          };
+          fb.addEventListener("input", grow);
           fb.addEventListener("keydown", (e) => e.stopPropagation());
           $("aGo").onclick = () => { call("agent_answer", a.id, "allow"); H.hideCard(); };
           $("aMore").onclick = () => { call("agent_answer", a.id, { deny: $("aFb").value || "Keep planning." }); H.hideCard(); };
@@ -489,80 +520,111 @@
   }
 
   // ---------------------------------------------------------------- TIMER / STOPWATCH / FOCUS (pomodoro)
-  const timer = store.get("timer", { mode: "timer", set: 300000, left: 300000, elapsed: 0, running: false, endAt: 0, startAt: 0, pomo: { phase: "work", round: 1 } });
-  timer.running = false;                              // a restart doesn't resume a countdown silently
+  // Three separate clocks that can all run at once: the tabs only choose
+  // which one you're looking at (a running one has a dot on its tab). The
+  // pill shows the one started last.
   const POMO = { work: 25 * 60000, break: 5 * 60000, long: 15 * 60000 };
-  function fmtTimer() {
-    const ms = timer.mode === "watch" ? (timer.running ? now() - timer.startAt + timer.elapsed : timer.elapsed)
-      : timer.running ? Math.max(0, timer.endAt - now()) : timer.left;
-    const s = Math.floor((timer.mode === "watch" ? ms : ms + 999) / 1000);
-    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = String(s % 60).padStart(2, "0");
-    return h ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
+  const fresh = () => ({
+    view: "timer", last: "",
+    timer: { set: 300000, left: 300000, endAt: 0, running: false },
+    watch: { elapsed: 0, startAt: 0, running: false },
+    pomo: { left: POMO.work, endAt: 0, running: false, phase: "work", round: 1 },
+  });
+  let T = store.get("timers", null);
+  if (!T || !T.timer || !T.watch || !T.pomo) T = fresh();
+  for (const m of ["timer", "pomo"]) T[m].running = false;           // a restart doesn't resume a countdown silently
+  if (T.watch.running) { T.watch.elapsed += now() - T.watch.startAt; T.watch.running = false; }
+  const save = () => store.set("timers", T);
+  const msOf = (m) => m === "watch" ? (T.watch.running ? now() - T.watch.startAt + T.watch.elapsed : T.watch.elapsed)
+    : T[m].running ? Math.max(0, T[m].endAt - now()) : T[m].left;
+  function fmtTimer(m = T.view) {
+    const ms = msOf(m), s = Math.floor((m === "watch" ? ms : ms + 999) / 1000);
+    const h = Math.floor(s / 3600), mm = Math.floor((s % 3600) / 60), ss = String(s % 60).padStart(2, "0");
+    return h ? `${h}:${String(mm).padStart(2, "0")}:${ss}` : `${mm}:${ss}`;
   }
+  // what the pill shows: the clock started last that is still running
+  const liveClock = () => (T.last && T[T.last] && T[T.last].running ? T.last : ["timer", "pomo", "watch"].find((m) => T[m].running) || "");
+  const timer = {                                    // the older code's view of it (slots, live text, gestures)
+    get running() { return !!liveClock(); },
+    get left() { return T.timer.left; },
+    get mode() { return liveClock() || T.view; },
+    get elapsed() { return T.watch.elapsed; },
+  };
   function paintTimer() {
     if (!$("tmBig")) return;
-    $("tmBig").textContent = fmtTimer();
-    $("tmBig").classList.toggle("run", timer.running);
-    [...$("tmModes").children].forEach((b) => b.classList.toggle("on", b.dataset.m === timer.mode));
-    $("tmSub").textContent = timer.mode === "pomo" ? `${timer.pomo.phase === "work" ? "Focus" : "Break"} · round ${timer.pomo.round} of 4` : "";
-    const presets = timer.mode === "timer" ? [1, 5, 10, 25].map((m) => `<button class="lnk" data-p="${m}">${m}m</button>`).join("") : "";
-    $("tmRow").innerHTML = `${presets}<button class="lnk go" id="tmGo">${timer.running ? "Pause" : "Start"}</button><button class="lnk" id="tmReset">Reset</button>`;
-    $("tmGo").onclick = () => (timer.running ? pauseTimer() : startTimer());
-    $("tmReset").onclick = resetTimer;
-    $("tmRow").querySelectorAll("[data-p]").forEach((b) => b.onclick = () => { timer.set = timer.left = +b.dataset.p * 60000; save(); paintTimer(); });
+    const m = T.view, c = T[m];
+    $("tmBig").textContent = fmtTimer(m);
+    $("tmBig").classList.toggle("run", c.running);
+    [...$("tmModes").children].forEach((b) => {
+      b.classList.toggle("on", b.dataset.m === m);
+      b.classList.toggle("running", T[b.dataset.m].running);
+    });
+    $("tmSub").textContent = m === "pomo" ? `${c.phase === "work" ? "Focus" : "Break"} · round ${c.round} of 4` : "";
+    const presets = m === "timer" ? [1, 5, 10, 25].map((x) => `<button class="lnk" data-p="${x}">${x}m</button>`).join("") : "";
+    $("tmRow").innerHTML = `${presets}<button class="lnk go" id="tmGo">${c.running ? "Pause" : "Start"}</button><button class="lnk" id="tmReset">Reset</button>`;
+    $("tmGo").onclick = () => (c.running ? pauseTimer(m) : startTimer(m));
+    $("tmReset").onclick = () => resetTimer(m);
+    $("tmRow").querySelectorAll("[data-p]").forEach((b) => b.onclick = () => {
+      T.timer.set = T.timer.left = +b.dataset.p * 60000;
+      if (T.timer.running) T.timer.endAt = now() + T.timer.left;
+      save(); paintTimer();
+    });
   }
-  const save = () => store.set("timer", timer);
-  function startTimer() {
-    if (timer.mode === "watch") { timer.startAt = now(); }
-    else { if (timer.left <= 0) timer.left = timer.mode === "pomo" ? POMO[timer.pomo.phase] : timer.set; timer.endAt = now() + timer.left; }
-    timer.running = true; save(); paintTimer();
+  function startTimer(m = T.view) {
+    const c = T[m];
+    if (m === "watch") c.startAt = now();
+    else { if (c.left <= 0) c.left = m === "pomo" ? POMO[c.phase] : c.set; c.endAt = now() + c.left; }
+    c.running = true; T.last = m; save(); paintTimer(); liveTick();
   }
-  function pauseTimer() {
-    if (timer.mode === "watch") timer.elapsed += now() - timer.startAt;
-    else timer.left = Math.max(0, timer.endAt - now());
-    timer.running = false; save(); paintTimer();
+  function pauseTimer(m = T.view) {
+    const c = T[m];
+    if (m === "watch") c.elapsed += now() - c.startAt;
+    else c.left = Math.max(0, c.endAt - now());
+    c.running = false; save(); paintTimer(); liveTick();
   }
-  function resetTimer() {
-    timer.running = false; timer.elapsed = 0;
-    timer.pomo = { phase: "work", round: 1 };
-    timer.left = timer.mode === "pomo" ? POMO.work : timer.set;
-    save(); paintTimer();
+  function resetTimer(m = T.view) {
+    const c = T[m];
+    c.running = false;
+    if (m === "watch") c.elapsed = 0;
+    else if (m === "pomo") Object.assign(c, { phase: "work", round: 1, left: POMO.work });
+    else c.left = c.set;
+    save(); paintTimer(); liveTick();
   }
-  function timerDone() {
-    timer.running = false; timer.left = 0;
-    let title = "Time's up", sub = `${H.clipLen(timer.set / 1000)} timer`;
-    if (timer.mode === "pomo") {
-      const was = timer.pomo.phase;
-      if (was === "work") { timer.pomo.phase = timer.pomo.round % 4 === 0 ? "long" : "break"; title = "Focus done"; sub = "Time for a break"; }
-      else { timer.pomo.phase = "work"; timer.pomo.round = timer.pomo.round % 4 + 1; title = "Break over"; sub = `Round ${timer.pomo.round}`; }
-      timer.left = POMO[timer.pomo.phase];
+  function timerDone(m) {
+    const c = T[m];
+    c.running = false; c.left = 0;
+    let title = "Time's up", sub = `${H.clipLen(T.timer.set / 1000)} timer`;
+    if (m === "pomo") {
+      if (c.phase === "work") { c.phase = c.round % 4 === 0 ? "long" : "break"; title = "Focus done"; sub = "Time for a break"; }
+      else { c.phase = "work"; c.round = c.round % 4 + 1; title = "Break over"; sub = `Round ${c.round}`; }
+      c.left = POMO[c.phase];
     }
     save(); paintTimer();
     popup("timer", `${chip("alarm", "var(--hop-orange)")}<div class="ct"><div class="t">${title}</div><div class="s">${sub}</div>
-      <div class="btns">${timer.mode === "pomo" ? '<button class="pbtn warn" id="tNext">Start next</button>' : '<button class="pbtn" id="tAgain">Again</button>'}<button class="pbtn" id="tOk">OK</button></div></div>`,
+      <div class="btns">${m === "pomo" ? '<button class="pbtn warn" id="tNext">Start next</button>' : '<button class="pbtn" id="tAgain">Again</button>'}<button class="pbtn" id="tOk">OK</button></div></div>`,
       280, 100, () => {
         $("tOk").onclick = () => H.hideCard();
-        if ($("tNext")) $("tNext").onclick = () => { startTimer(); H.hideCard(); };
-        if ($("tAgain")) $("tAgain").onclick = () => { timer.left = timer.set; startTimer(); H.hideCard(); };
+        if ($("tNext")) $("tNext").onclick = () => { startTimer("pomo"); H.hideCard(); };
+        if ($("tAgain")) $("tAgain").onclick = () => { T.timer.left = T.timer.set; startTimer("timer"); H.hideCard(); };
       }, { history: { app: "Timer", title, text: sub } });
   }
+  // switching tabs never stops anything
   $("tmModes").addEventListener("click", (e) => {
-    const b = e.target.closest("button[data-m]"); if (!b || timer.running) return;
-    timer.mode = b.dataset.m; resetTimer();
+    const b = e.target.closest("button[data-m]"); if (!b) return;
+    T.view = b.dataset.m; save(); paintTimer();
   });
   $("tmBig").addEventListener("wheel", (e) => {
     e.preventDefault();
-    if (timer.running || timer.mode !== "timer") return;
-    timer.set = timer.left = Math.max(60000, Math.min(99 * 60000, timer.left + (e.deltaY < 0 ? 60000 : -60000)));
+    if (T.view !== "timer" || T.timer.running) return;
+    T.timer.set = T.timer.left = Math.max(60000, Math.min(99 * 60000, T.timer.left + (e.deltaY < 0 ? 60000 : -60000)));
     save(); paintTimer();
   }, { passive: false });
   setInterval(() => {
-    if (!timer.running) return;
-    if (timer.mode !== "watch" && now() >= timer.endAt) timerDone();
-    if (H.isOpen() && $("tmBig").closest(".pg.on")) $("tmBig").textContent = fmtTimer();
+    for (const m of ["timer", "pomo"]) if (T[m].running && now() >= T[m].endAt) timerDone(m);
+    if (H.isOpen() && $("tmBig").closest(".pg.on")) $("tmBig").textContent = fmtTimer(T.view);
   }, 250);
   paintTimer();
-  window.__hopTimer = { start: (ms) => { timer.mode = "timer"; timer.set = timer.left = ms; startTimer(); }, state: () => ({ ...timer }) };
+  window.__hopTimer = { start: (ms) => { T.view = "timer"; T.timer.set = T.timer.left = ms; startTimer("timer"); }, state: () => JSON.parse(JSON.stringify(T)) };
 
   // ---------------------------------------------------------------- CALENDAR (an iCal link)
   const alertedEv = new Set();
@@ -608,11 +670,15 @@
       <div class="ct"><div class="s">${esc(n.app)}</div><div class="t">${esc(n.title || n.app)}</div>${n.text ? `<div class="body">${esc(n.text)}</div>` : ""}</div>`,
       340, n.text ? 96 : 72, null, { history: { app: n.app, title: n.title, text: n.text, icon: n.icon || "" } });
   }
+  // Hop's own pop-ups in the list: their icon, not a letter
+  const OWN = { Downloads: ["download", "#64d2ff"], Scores: ["ball-football", "#30d158"], Reminder: ["bell", "#a5a3ff"], Weather: ["cloud-rain", "#5ac8fa"],
+                Calendar: ["calendar-event", "#ff453a"], Timer: ["alarm", "#ff9f0a"], Clipper: ["photo", "#ff375f"], Screenshots: ["photo", "#64d2ff"],
+                Prayer: ["building-mosque", "#ffd479"], "Game mode": ["device-gamepad-2", "#c7c7cc"], Shelf: ["pin", "#c7c7cc"], Hop: ["alert-triangle", "#ff9f0a"] };
   function paintAlerts() {
     const rows = $("alRows");
     if (!rows) return;
     rows.innerHTML = state.history.length ? state.history.slice(0, 20).map((h) => `<div class="row nrow">
-        <span class="n-ic" style="--c:${APPC[h.app] || "#8e8e93"}">${h.icon ? `<img src="${esc(h.icon)}" alt="">` : esc(letter(h.app))}</span>
+        <span class="n-ic${OWN[h.app] ? " own" : ""}" style="--c:${(OWN[h.app] || [])[1] || APPC[h.app] || "#8e8e93"}">${h.icon ? `<img src="${esc(h.icon)}" alt="">` : OWN[h.app] ? ICON(OWN[h.app][0], 16) : esc(letter(h.app))}</span>
         <div class="grow"><div class="t1"><span class="n-app">${esc(h.app || "")}</span><span class="tm">${H.ago(h.at / 1000)}</span></div>
           <div class="t2"><b>${esc(h.title || h.app)}</b>${h.text ? " · " + esc(h.text) : ""}</div></div></div>`).join("")
       : `<div class="empty-note">No notifications yet</div>`;
@@ -621,7 +687,17 @@
   $("alClear").addEventListener("click", () => {
     const rs = [...$("alRows").querySelectorAll(".row")];
     rs.forEach((r, i) => { r.style.transitionDelay = `${i * 35}ms`; r.classList.add("gone"); });
-    setTimeout(() => { state.history = []; store.set("history", []); paintAlerts(); }, 260 + rs.length * 35);
+    const box = $("alRows");
+    setTimeout(() => {                                 // fold the list shut
+      box.style.height = box.offsetHeight + "px"; box.style.transition = "height 220ms cubic-bezier(.2, .8, .2, 1)";
+      void box.offsetHeight; box.style.height = "0px";
+    }, 200 + rs.length * 35);
+    setTimeout(() => {
+      state.history = []; store.set("history", []);
+      box.style.transition = box.style.height = "";
+      paintAlerts();
+      const n = box.querySelector(".empty-note"); if (n) n.animate([{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }], { duration: 220, easing: "ease-out" });
+    }, 440 + rs.length * 35);
   });
 
   // ---------------------------------------------------------------- SHELF (files parked on the island)
@@ -678,7 +754,7 @@
         const soccer = !m.sport || m.sport === "soccer";
         const word = soccer ? "GOAL" : "SCORE";
         const ball = ICON({ soccer: "ball-football", basketball: "ball-basketball", football: "ball-american-football", baseball: "ball-baseball" }[m.sport || "soccer"] || "ball-football", 18);
-        popup("sports", `<div class="goal-crest">${logo ? `<img src="${esc(logo)}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${ball}',style:'font-size:30px'}))">` : `<span style="font-size:30px">${ball}</span>`}<span class="ball">${ball}</span></div>
+        popup("sports", `<div class="goal-crest">${logo ? `<img src="${esc(logo)}" alt="" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="crest-fb" hidden>${ball}</span>` : `<span class="crest-fb">${ball}</span>`}<span class="ball">${ball}</span></div>
           <div class="ct"><div class="goal-word">${word}!</div>
           <div class="goal-line"><span class="${homeScored ? "hit" : ""}">${esc(m.home)}</span><span class="sc">${m.hs} – ${m.as}</span><span class="${homeScored ? "" : "hit"}">${esc(m.away)}</span></div>
           <div class="goal-sub">${esc(m.status)} · ${esc(m.league)}</div></div>`, 340, 92, () => {
@@ -694,6 +770,7 @@
   // ---------------------------------------------------------------- TELEPROMPTER
   let prY = 0, prAnim = 0, prLast = 0;
   function loadPrompter() {
+    if (!state.prompter.playing) $("prText").style.transform = `translateY(${prStart() - prY}px)`;
     call("get_prompter").then((t) => {
       state.prompter.text = t || "";
       $("prText").textContent = state.prompter.text || "Write your script in Settings → Teleprompter. It scrolls here, right under your webcam.";
@@ -709,15 +786,16 @@
       prY += dt * (L().prompterSpeed || 40);
       const max = $("prText").offsetHeight - 30;
       if (prY > max) { prY = max; state.prompter.playing = false; $("prPlay").textContent = "Play"; }
-      $("prText").style.transform = `translateY(${(48 - prY).toFixed(1)}px)`;
+      $("prText").style.transform = `translateY(${(prStart() - prY).toFixed(1)}px)`;
       $("prInfo").textContent = `${L().prompterSpeed || 40} px/s`;
       if (state.prompter.playing) prAnim = requestAnimationFrame(step);
     };
     prAnim = requestAnimationFrame(step);
   }
   $("prPlay").addEventListener("click", () => { state.prompter.playing = !state.prompter.playing; prompterRun(state.prompter.playing); });
-  $("prBack").addEventListener("click", () => { prY = 0; $("prText").style.transform = "translateY(48px)"; });
-  $("prText").style.transform = "translateY(48px)";
+  const prStart = () => Math.round(($("prView").clientHeight || 96) * 0.3);
+  $("prBack").addEventListener("click", () => { prY = 0; $("prText").style.transform = `translateY(${prStart()}px)`; });
+  $("prText").style.transform = "translateY(28px)";
 
   // ---------------------------------------------------------------- BATTERY
   function paintBattery() {
@@ -819,6 +897,8 @@
     });
     buildTabs(Lx);
     requestAnimationFrame(dividers);
+    // widgets that just joined a page show their content at once, not on the next visit
+    setTimeout(() => (Lx.boards || []).forEach((b) => b.widgets.forEach((w) => window.__hopPage && window.__hopPage(w.w))), 0);
   };
   const TAB_ICON = { music: "home", agents: "robot", calendar: "calendar-event", clips: "photo", pc: "device-desktop", notes: "notes",
                      timer: "alarm", alerts: "bell", today: "calendar-event", prayer: "building-mosque", weather: "cloud", shelf: "folder",
@@ -869,7 +949,7 @@
   // ---- the clip-saved card: Open / Copy / Upload & copy link / Trim
   const UPLOAD_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4m-4.5 4.5L12 4l4.5 4.5M5 15v3.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V15"/></svg>';
   const TRIM_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.6"/><circle cx="6" cy="18" r="2.6"/><path d="M8.2 7.4 20 17M8.2 16.6 20 7"/></svg>';
-  window.__islandClip = (c) => {
+  window.__islandClip = (c, back) => {
     if (H.off("clipCard")) return;
     const label = c.kind === "recording" ? "Recording saved" : "Clip saved";
     const sub = `${H.clipLen(c.seconds)}${c.game ? " · " + esc(c.game) : " · just now"}`;
@@ -890,7 +970,7 @@
         $("cCopy").onclick = (e) => { call("copy_file", c.path); e.target.classList.add("ok"); e.target.textContent = "Copied ✓"; H.fitCard(); H.armCard(2500); };
         if ($("cUp")) $("cUp").onclick = () => { call("upload_file", c.path); };
         if ($("cTrim")) $("cTrim").onclick = () => trimCard(c);
-      }, { history: { app: "Clipper", title: label, text: c.name || "" } });
+      }, back ? {} : { history: { app: "Clipper", title: label, text: c.name || "" } });
   };
   function trimCard(c) {
     const dur = c.seconds || 30;
@@ -924,7 +1004,7 @@
         $("trA").addEventListener("pointerdown", drag("a"));
         $("trB").addEventListener("pointerdown", drag("b"));
         v.addEventListener("timeupdate", () => { if (v.currentTime > b || v.currentTime < a - 0.2) v.currentTime = a; });
-        $("trNo").onclick = () => H.hideCard();
+        $("trNo").onclick = () => window.__islandClip(c, true);      // back to Open / Copy / Upload / Trim
         $("trSave").onclick = () => {
           $("trSave").textContent = "Saving…";
           call("trim_clip", c.path, a, b).then((out) => {
@@ -1034,7 +1114,7 @@
     settings: () => api.openSettings(),
     record: () => document.getElementById("rec").click(),
     snap: () => api.recenter(),
-    timer: () => (timer.running ? pauseTimer() : startTimer()),
+    timer: () => (T[T.view].running ? pauseTimer(T.view) : startTimer(T.view)),
   };
   island.addEventListener("dblclick", (e) => {
     if (e.target.closest("button, input, [contenteditable], .progress, .vol-row, .card")) return;
@@ -1070,7 +1150,10 @@
   // ================================================================ THE HOST'S EVENTS
   const ON = {
     notif, download, snip, rain, sports,
-    agents: (d) => { state.agents = d.sessions || []; state.usage = d.usage || null; if (H.pageId() === "agents") paintAgents(); liveTick(); },
+    agents: (d) => {
+      const asking = (d.sessions || []).some((x) => x.status === "ask");
+      if (asking && !state.agents.some((x) => x.status === "ask")) state.askSince = now();
+      state.agents = d.sessions || []; state.usage = d.usage || null; if (H.pageId() === "agents") paintAgents(); liveTick(); },
     agentAsk: agentCard,
     agentEdit,
     privacy: (d) => {

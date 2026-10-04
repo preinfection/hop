@@ -12,6 +12,9 @@
   .t { font-size: 26px; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
   .n { color: rgba(235,235,245,.6); font-weight: 500; font-size: 11.5px; margin-top: 2px; }
   .d { color: #ffd479; font-size: 10.5px; font-weight: 500; }
+  /* a narrow tile: one city, as big as it fits */
+  @media (max-width: 220px) { body { padding: 0 8px; } .c:not(:first-child) { display: none; } .t { font-size: 30px; } }
+  @media (max-height: 70px) { .d { display: none; } }
 </style>
 </head>
 <body>

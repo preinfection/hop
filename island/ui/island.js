@@ -262,7 +262,9 @@
       if (can) return;
     }
     e.preventDefault();
-    const how = (layout && layout.wheel) || "pages";
+    let how = (layout && layout.wheel) || "pages";
+    // widget pages are switched with the tabs on top, never by scrolling
+    if (how === "pages" && document.documentElement.classList.contains("boards")) how = "none";
     if (how === "none") return;
     if (how === "volume") {
       vol.level = Math.min(1, Math.max(0, Math.round((vol.level + (e.deltaY < 0 ? 0.05 : -0.05)) * 100) / 100));
@@ -495,11 +497,12 @@
     if (cardOn) draw(); else { cardOn = true; Promise.resolve(api.setBig(true)).then(draw); }
     if (ms) armCard(ms);
   }
-  function fitCard() {
+  function fitCard(heightOnly) {
     card.style.width = "max-content";
     // up to the open island's width: a long line makes the card wider, not wrapped
-    const w = Math.min(Math.max(360, ((layout && layout.openW) || 360) - 20), 560,
-                       Math.max(160, card.offsetWidth + (card.querySelector(".body.one") ? 10 : 3)));   // fonts can measure a hair narrow (a one-line command more)
+    const w = heightOnly ? parseFloat(island.style.getPropertyValue("--card-w")) || 312
+      : Math.min(Math.max(360, ((layout && layout.openW) || 360) - 20), 560,
+                 Math.max(160, card.offsetWidth + (card.querySelector(".body.one") ? 10 : 3)));   // fonts can measure a hair narrow (a one-line command more)
     card.style.width = w + "px";
     card.style.height = "auto";
     const maxH = ((layout && layout.openH) || 150) + 42;          // the window's room below the open island

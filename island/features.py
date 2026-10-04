@@ -1288,6 +1288,16 @@ class FeatureApi:
         self._f.save()
         return True
 
+    def get_startup(self):
+        """Does Hop Island start with Windows? (Its startup shortcut, as the installer makes it.)"""
+        return os.path.exists(os.path.join(os.environ.get("APPDATA", ""), r"Microsoft\Windows\Start Menu\Programs\Startup", "Hop Island.lnk"))
+
+    def set_startup(self, on):
+        self._i.cfg["startAtLogin"] = bool(on)
+        host.write_config(self._i.cfg)
+        host.set_startup(bool(on))
+        return self.get_startup()
+
     def get_city(self):
         loc = self._i.cfg.get("location") or {}
         return loc.get("name") or (loc.get("label") or "").split(",")[0]

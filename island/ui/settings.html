@@ -89,7 +89,7 @@
   .side { padding: 22px 22px 22px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 14px;
     min-height: 0; overflow-y: auto; }
   .side > * { flex: 0 0 auto; }            /* nothing squashes the preview; the column scrolls instead */
-  .stage { position: relative; height: 262px; border-radius: 16px; overflow: hidden;
+  .stage { position: relative; height: 320px; border-radius: 16px; overflow: hidden;
     background: var(--stage); }
   .stage iframe { position: absolute; left: 50%; top: 14px; width: 360px; height: 196px; border: 0;
     transform: translateX(-50%) scale(1.2); transform-origin: 50% 0; background: transparent;
@@ -475,7 +475,7 @@
   }
   $("chips").addEventListener("click", (e) => { const b = e.target.closest(".chip"); if (b) showPage(+b.dataset.i); });
   // hovering a section about one page shows that page in the preview
-  const SECTION_PAGE = { "s-player": "music", "s-today": "today", "s-pc": "pc", "s-agents": "agents", "s-calendar": "calendar",
+  const SECTION_PAGE = { "s-player": "music", "s-today": "today", "s-pc": "pc", "s-agents": "agents", "s-calendar": "calendar", "s-clipsisland": "clips", "s-prayer": "prayer",
                          "s-sports": "sports", "s-prompter": "prompter" };
   document.querySelectorAll("#islandPanel section").forEach((sec) => sec.addEventListener("pointerenter", () => {
     const id = SECTION_PAGE[sec.id]; if (!id || !L) return;

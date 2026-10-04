@@ -3,9 +3,9 @@
    panels side by side split by thin dividers (no boxes), and its type scale
    (15 / 14 / 11 / 10 px at 88 / 58 / 36 % white). Rebuilt for Hop; no code
    was copied (that repository has no licence). */
-:root { --t1: rgba(255, 255, 255, 0.88); --t2: rgba(255, 255, 255, 0.58); --t3: rgba(255, 255, 255, 0.36); --div: rgba(255, 255, 255, 0.08); }
-html.boards .island.open { border-radius: 40px; }
-html.boards.notch .island.open { border-radius: 0 0 40px 40px; }
+:root { --t1: rgba(255, 255, 255, 0.88); --t2: rgba(255, 255, 255, 0.58); --t3: rgba(255, 255, 255, 0.46); --div: rgba(255, 255, 255, 0.08); }
+html.boards .island.open { border-radius: var(--r-open); }
+html.boards.notch .island.open { border-radius: 0 0 var(--r-open) var(--r-open); }
 html.boards .pg-dots { display: none; }
 
 /* ---- the top bar: a tab per page, then snap / refresh / settings */
@@ -55,7 +55,7 @@ html.boards .topbar { position: absolute; top: 12px; left: 20px; right: 20px; he
 .tile .wg-music .controls button svg { width: 20px; height: 20px; }
 .tile .wg-music .controls .play svg { width: 22px; height: 22px; }
 .tile .wg-music .progress { grid-area: prog; gap: 8px; }
-.tile .wg-music .time { font: 500 10px/1 "Cascadia Mono", Consolas, ui-monospace, monospace; color: var(--t3); width: 34px; }
+.tile .wg-music .time { font: 500 10px/1 var(--isl-font); font-variant-numeric: tabular-nums; color: var(--t3); width: 34px; }
 .tile .wg-music .rail { height: 4px; }
 /* the volume button sits top right of the player; its slider drops DOWN under it */
 .tile .wg-music .vol-btn { top: 0 !important; right: 0 !important; left: auto !important; bottom: auto !important; width: 26px; height: 26px; }
@@ -77,7 +77,7 @@ html.boards .topbar { position: absolute; top: 12px; left: 20px; right: 20px; he
 .pn-in { font-size: 11px; font-weight: 500; color: var(--t2); margin-bottom: 8px; }
 .pn-list { display: flex; flex-direction: column; gap: 3px; margin-top: auto; }
 .pn-list div { display: flex; justify-content: space-between; font-size: 11px; font-weight: 500; color: var(--t2); }
-.pn-list b { font: 500 10.5px/1.3 "Cascadia Mono", Consolas, ui-monospace, monospace; color: var(--t3); }
+.pn-list b { font: 500 10.5px/1.3 var(--isl-font); font-variant-numeric: tabular-nums; color: var(--t3); }
 .pn-list .nx, .pn-list .nx b { color: var(--hop-amber); }
 @container (max-height: 120px) {
   .wg-prayer .pn-list { flex-direction: row; justify-content: space-between; }
@@ -118,7 +118,7 @@ html.boards .topbar { position: absolute; top: 12px; left: 20px; right: 20px; he
 .tile .row.click:hover { background: rgba(255, 255, 255, 0.03); }
 .tile .row .t1 { font-size: 13px; font-weight: 600; color: var(--t1); }
 .tile .row .t2 { font-size: 11px; font-weight: 500; color: var(--t2); margin-top: 2px; }
-.tile .row .tm { font: 500 10px/1.2 "Cascadia Mono", Consolas, ui-monospace, monospace; color: var(--t3); }
+.tile .row .tm { font: 500 10px/1.2 var(--isl-font); font-variant-numeric: tabular-nums; color: var(--t3); }
 .nrow { align-items: flex-start !important; gap: 10px !important; }
 .n-ic { width: 28px; height: 28px; border-radius: 8px; flex: none; display: grid; place-items: center; overflow: hidden;
   font-size: 12px; font-weight: 700; color: #fff; background: color-mix(in srgb, var(--c) 70%, #000); }
@@ -151,7 +151,7 @@ html.boards .topbar { position: absolute; top: 12px; left: 20px; right: 20px; he
   .wg-timer .tm-modes button { width: 30px; padding: 0; justify-content: center; }
   .wg-timer .tm-modes button span { display: none; }
   .wg-timer .tm-modes button svg { display: block; }
-  .wg-timer .tm-row .lnk:not(.go) { display: inline-flex !important; }
+  .wg-timer .tm-row #tmReset { display: inline-flex !important; }
 }
 .tile .wg-timer .tm-big { font-size: clamp(28px, 22cqh, 44px); letter-spacing: -0.02em; color: var(--t1); }
 .tile .wg-timer .tm-big.run { color: var(--hop-orange); }
@@ -176,3 +176,81 @@ html.boards .topbar { position: absolute; top: 12px; left: 20px; right: 20px; he
   .wg-timer .tm-row .lnk:not(.go) { display: none !important; }
   .wg-timer { gap: 4px !important; }
 }
+
+/* ---- lists scroll; their rows keep their height (they were squeezed into each other) */
+.tile .rows > .row, .tile .rows > .nrow, .tile #spRows > .match { flex: none; }
+.tile .rows { overflow-y: auto; }
+
+/* ---- Notes: a notepad, not a box: roomy text on faint ruled lines */
+.tile .notes {
+  background: none; border-radius: 0; padding: 0 2px; font-size: 13px; line-height: 24px; color: var(--t1);
+  background-image: linear-gradient(to bottom, transparent 23px, rgba(255, 255, 255, 0.06) 23px);
+  background-size: 100% 24px; background-attachment: local; overflow-y: auto; }
+.tile .notes:focus { background-color: transparent; }
+.tile .notes:empty::before { content: attr(data-ph); color: var(--t3); }
+.tile .wg-notes .ph .sub { font-family: inherit; font-variant-numeric: tabular-nums; font-size: 10px; color: var(--t3); }
+.n-ic.own { color: var(--c); background: color-mix(in srgb, var(--c) 16%, transparent); }
+
+/* ---- plan feedback: always wraps, even one long word; no sideways scrolling */
+.card textarea.fb { overflow-x: hidden; overflow-wrap: anywhere; word-break: break-word; white-space: pre-wrap; max-width: 100%; box-sizing: border-box; }
+
+/* ---- optical centre: a card hanging from the top edge (notch) reads as
+   "high" when its content is centred by the numbers, so it sits 3 px lower */
+.notch .card { padding-top: 17px; padding-bottom: 11px; }
+
+/* ================================================================ review 3 fixes */
+/* the tabs line up with the panels (24 px in, like them) */
+html.boards .topbar { left: 24px; right: 24px; }
+/* type scale: SuperIsland's 15 title / 14 body / 11 secondary / 10 meta */
+.tile .row .t1 { font-size: 14px; }
+.tile .row .t2, .nrow .t2 { font-size: 11px !important; }
+/* scores: no box */
+.tile .match { background: none; padding: 6px 0; border-radius: 0; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.tile .match:first-child { border-top: 0; }
+/* weather and today: their content sits together, centred, not split by a gap */
+.tile .wg-weather, .tile .wg-today { justify-content: center !important; }
+.tile .wx-city { margin-top: 10px; }
+/* the timer in a wide, short tile: the modes on top, then the time beside its buttons */
+@container (max-height: 120px) and (min-width: 181px) {
+  .wg-timer { flex-direction: row !important; flex-wrap: wrap; align-content: center; justify-content: center; column-gap: 14px !important; row-gap: 6px !important; }
+  .wg-timer .tm-modes { flex-basis: 100%; justify-content: center; display: flex; }
+  .wg-timer .tm-modes { background: none; }
+  .wg-timer .tm-big { font-size: 30px !important; }
+  .wg-timer .tm-sub, .wg-timer [data-p] { display: none !important; }
+  .wg-timer .tm-row { flex-wrap: nowrap; }
+}
+/* the timer in a tall narrow tile: Start and Reset side by side, no presets */
+@container (max-width: 180px) and (min-height: 121px) { .wg-timer [data-p] { display: none !important; } .wg-timer .tm-row { flex-wrap: nowrap; } }
+/* shelf in a short tile: smaller icons so the names fit under them */
+@container (max-height: 120px) { .wg-shelf .sh .ic { width: 30px; height: 30px; border-radius: 8px; font-size: 9px; } .wg-shelf .ph { margin-bottom: 0 !important; } }
+/* the goal card's fallback (no crest picture): the ball icon */
+.goal-crest .crest-fb { display: grid; place-items: center; color: var(--hop-green); }
+.goal-crest .crest-fb svg { width: 30px; height: 30px; }
+.goal-crest .crest-fb[hidden] { display: none; }
+/* activities are measured off-screen first (island.js / features.js activity) */
+.act-view.act-probe { position: absolute; inset: auto; left: -9999px; width: max-content; opacity: 0; visibility: hidden; }
+
+/* presets only where there is room (wide, tall tiles) */
+@container (max-width: 180px) { .wg-timer .tm-row button[data-p] { display: none !important; } }
+@container (max-height: 120px) { .wg-timer .tm-row button[data-p] { display: none !important; } }
+.tile .tm-row .go { background: var(--hop-orange); color: #2b1800; }
+
+/* ONE font everywhere on the island (Hop's), digits even-width wherever numbers sit in columns */
+.island, .island * { font-family: var(--isl-font); }
+.island .time, .island .tm, .island .pn-list b, .island .tm-big, .island .clock, .island .sv, .island .gring span, .island .sc { font-variant-numeric: tabular-nums; }
+.card .body.code { font-size: 12px; letter-spacing: 0; }
+
+/* a clock that is running shows a small dot on its tab */
+.tm-modes button { position: relative; }
+.tm-modes button.running::after { content: ""; position: absolute; top: 3px; right: 4px; width: 5px; height: 5px; border-radius: 50%; background: var(--hop-orange); }
+
+/* ONE corner rounding for everything that opens (cards and the open island),
+   so a small card isn't a pill and nothing looks different from the rest */
+:root { --r-card: 24px; }
+.island.carding, .island.carding.open { border-radius: var(--r-card) !important; }
+.notch .island.carding, .notch .island.carding.open { border-radius: 0 0 var(--r-card) var(--r-card) !important; }
+
+/* the privacy dot's room: the right slot SLIDES over (a transform glides;
+   the margin it used before snapped in one frame) */
+.island.pdot-on .sl-r { margin-right: 0 !important; transform: translateX(-9px); }
+.mini .sl-r { transition: transform 320ms cubic-bezier(.22, 1, .36, 1) !important; }

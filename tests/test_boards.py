@@ -72,8 +72,8 @@ def test_resize_and_add_from_the_editor(board_app):
 def test_no_room_means_no_change(board_app):
     pg, _, _ = board_app
     pg.locator("#boardsEd").scroll_into_view_if_needed()
-    pg.click("#boardsEd [data-b='0'][data-j='1'][data-ws='b']")          # Prayer -> Big: the page is full
-    pg.wait_for_timeout(300)
+    btn = pg.locator("#boardsEd [data-b='0'][data-j='1'][data-ws='b']")   # Prayer -> Big: the page is full
+    assert btn.is_disabled() and btn.get_attribute("title") == "No room on this page"
     assert saved()["boards"][0]["widgets"][1]["s"] == "t"
 
 
