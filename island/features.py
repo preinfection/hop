@@ -894,7 +894,7 @@ class Features:
                 continue
             for n in w.poll():
                 icon = watch.image_data_url(n["image"]) if n.get("image") else ""
-                self.js("notif", {"app": n["app"], "title": n["title"], "text": n["body"], "icon": icon})
+                self.js("notif", {"app": n["app"], "title": n["title"], "text": n["body"], "icon": icon, "appIcon": n.get("appIcon") or ""})
 
     def calendar_loop(self):
         last_url, last_fetch = None, 0

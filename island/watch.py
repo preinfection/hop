@@ -99,6 +99,126 @@ def image_data_url(src, size=96):
         return ""
 
 
+_APP_ICONS = {}
+
+
+def app_icon(aumid, size=64):
+    """The sending app's own icon (the one Start shows), as a PNG data: URL,
+    from its notification app id: Windows' shell resolves
+    shell:AppsFolder + the app id for packaged and desktop apps alike. Cached per
+    app; '' when Windows has none (the page then shows a letter)."""
+    if not aumid:
+        return ""
+    if aumid in _APP_ICONS:
+        return _APP_ICONS[aumid]
+    url = ""
+    for name in _icon_sources(aumid):
+        try:
+            url = _shell_icon(name, size)
+        except Exception:
+            url = ""
+        if url:
+            break
+    _APP_ICONS[aumid] = url
+    return url
+
+
+def _icon_sources(aumid):
+    """Where an app's icon can come from, best first: its Start entry; for an
+    id that is a known folder's GUID plus a path to an exe, that exe; else the
+    exe of a running app with the same name (Discord's id isn't in Start)."""
+    yield "shell:AppsFolder\\" + aumid
+    m = re.match(r"^\{([0-9A-Fa-f-]{36})\}\\(.+)$", aumid)
+    if m:
+        try:
+            import uuid
+            p = ctypes.c_wchar_p()
+            g = (ctypes.c_ubyte * 16).from_buffer_copy(uuid.UUID(m.group(1)).bytes_le)
+            if ctypes.windll.shell32.SHGetKnownFolderPath(ctypes.byref(g), 0, None, ctypes.byref(p)) == 0:
+                path = os.path.join(p.value, m.group(2))
+                ctypes.windll.ole32.CoTaskMemFree(p)
+                if os.path.isfile(path):
+                    yield path
+        except Exception:
+            pass
+    want = app_display_name(aumid).lower()
+    try:
+        import psutil
+        for pr in psutil.process_iter(["name", "exe"]):
+            n = (pr.info.get("name") or "").lower()
+            if n.endswith(".exe") and n[:-4].replace(" ", "") == want.replace(" ", "") and pr.info.get("exe"):
+                yield pr.info["exe"]
+                break
+    except Exception:
+        pass
+
+
+def _shell_icon(parse_name, size):
+    import base64
+    import io
+    import ctypes.wintypes as wt
+    from PIL import Image
+
+    class GUID(ctypes.Structure):
+        _fields_ = [("a", ctypes.c_uint32), ("b", ctypes.c_uint16), ("c", ctypes.c_uint16), ("d", ctypes.c_ubyte * 8)]
+
+    def guid(s):
+        import uuid
+        u = uuid.UUID(s)
+        g = GUID()
+        ctypes.memmove(ctypes.byref(g), u.bytes_le, 16)
+        return g
+    shell32, gdi32, ole32 = ctypes.windll.shell32, ctypes.windll.gdi32, ctypes.windll.ole32
+    ole32.CoInitializeEx(None, 2)                                  # apartment-threaded (harmless if already)
+    factory = ctypes.c_void_p()
+    iid = guid("bcc18b79-ba16-442f-80c4-8a59c30c463b")             # IShellItemImageFactory
+    shell32.SHCreateItemFromParsingName.argtypes = [ctypes.c_wchar_p, ctypes.c_void_p, ctypes.POINTER(GUID), ctypes.POINTER(ctypes.c_void_p)]
+    if shell32.SHCreateItemFromParsingName(parse_name, None, ctypes.byref(iid), ctypes.byref(factory)) != 0 or not factory:
+        return ""
+    vtbl = ctypes.cast(ctypes.cast(factory, ctypes.POINTER(ctypes.c_void_p))[0], ctypes.POINTER(ctypes.c_void_p))
+    release = ctypes.WINFUNCTYPE(ctypes.c_ulong, ctypes.c_void_p)(vtbl[2])
+
+    class SIZE(ctypes.Structure):
+        _fields_ = [("cx", ctypes.c_long), ("cy", ctypes.c_long)]
+    get_image = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, SIZE, ctypes.c_int, ctypes.POINTER(wt.HANDLE))(vtbl[3])
+    hbm = wt.HANDLE()
+    try:
+        if get_image(factory, SIZE(size, size), 0x4, ctypes.byref(hbm)) != 0 or not hbm:      # SIIGBF_ICONONLY
+            return ""
+    finally:
+        release(factory)
+    try:
+        class BITMAPINFOHEADER(ctypes.Structure):
+            _fields_ = [("biSize", wt.DWORD), ("biWidth", ctypes.c_long), ("biHeight", ctypes.c_long), ("biPlanes", wt.WORD),
+                        ("biBitCount", wt.WORD), ("biCompression", wt.DWORD), ("biSizeImage", wt.DWORD), ("biXPelsPerMeter", ctypes.c_long),
+                        ("biYPelsPerMeter", ctypes.c_long), ("biClrUsed", wt.DWORD), ("biClrImportant", wt.DWORD)]
+
+        class BITMAP(ctypes.Structure):
+            _fields_ = [("bmType", ctypes.c_long), ("bmWidth", ctypes.c_long), ("bmHeight", ctypes.c_long), ("bmWidthBytes", ctypes.c_long),
+                        ("bmPlanes", wt.WORD), ("bmBitsPixel", wt.WORD), ("bmBits", ctypes.c_void_p)]
+        bm = BITMAP()
+        gdi32.GetObjectW(hbm, ctypes.sizeof(bm), ctypes.byref(bm))
+        w, h = bm.bmWidth, bm.bmHeight
+        if w <= 0 or h <= 0:
+            return ""
+        bi = BITMAPINFOHEADER(ctypes.sizeof(BITMAPINFOHEADER), w, -h, 1, 32, 0, 0, 0, 0, 0, 0)  # top-down, 32-bit BGRA
+        buf = ctypes.create_string_buffer(w * h * 4)
+        dc = ctypes.windll.user32.GetDC(None)
+        try:
+            if not gdi32.GetDIBits(dc, hbm, 0, h, buf, ctypes.byref(bi), 0):
+                return ""
+        finally:
+            ctypes.windll.user32.ReleaseDC(None, dc)
+        im = Image.frombuffer("RGBA", (w, h), buf.raw, "raw", "BGRA", 0, 1)
+        if im.getextrema()[3][1] == 0:                              # no alpha at all: opaque
+            im.putalpha(255)
+        out = io.BytesIO()
+        im.save(out, "PNG")
+        return "data:image/png;base64," + base64.b64encode(out.getvalue()).decode()
+    finally:
+        gdi32.DeleteObject(hbm)
+
+
 def parse_toast(payload):
     """(title, body) from a toast's XML payload, or None if it has no text."""
     if isinstance(payload, (bytes, bytearray)):
@@ -155,7 +275,8 @@ class NotifWatcher:
                 continue
             got = parse_toast(payload)
             if got:
-                out.append({"app": app_display_name(aumid), "title": got[0], "body": got[1], "image": toast_image(payload)})
+                out.append({"app": app_display_name(aumid), "title": got[0], "body": got[1], "image": toast_image(payload),
+                            "appIcon": app_icon(aumid)})
         return out
 
 

@@ -446,6 +446,9 @@
   const AGENT_LOGO = { claude: "claude", codex: "openai", chatgpt: "openai", openai: "openai", gemini: "googlegemini",
                        copilot: "githubcopilot", cursor: "cursor" };
   const ST = { work: "Working", ask: "Needs you", done: "Done", idle: "Idle" };
+  const TOOL_NAME = { claude: "Claude Code", codex: "Codex", chatgpt: "ChatGPT", openai: "Codex", gemini: "Gemini", copilot: "Copilot", cursor: "Cursor" };
+  const agentHist = (a, title, text) => ({ app: TOOL_NAME[a.tool] || a.name, logo: AGENT_LOGO[a.tool] || "", title, text: a.name ? `${a.name}: ${text}` : text });
+
   const mascot = (tool, status, big) => `<span class="mascot ${status}${big ? " big" : ""}">${LOGO[AGENT_LOGO[tool]] || LOGO.anthropic || ""}</span>`;
   function paintAgents() {
     const rows = $("agRows");
@@ -472,7 +475,7 @@
           $("aAllow").onclick = () => { call("agent_answer", a.id, "allow"); H.hideCard(); };
           $("aDeny").onclick = () => { call("agent_answer", a.id, "deny"); H.hideCard(); };
           $("aTerm").onclick = () => { call("agent_answer", a.id, "pass"); H.hideCard(); };
-        }, { sticky: true, history: { app: a.name, title: "Permission", text: a.summary || "" } });
+        }, { sticky: true, history: agentHist(a, "Permission", a.summary || "") });
     } else if (a.kind === "question") {
       const picked = new Set();
       popup("agent", `${head(a.question || "A question")}
@@ -486,7 +489,7 @@
             b.classList.toggle("ok", picked.has(o));
           }));
           if (a.multi) $("aSend").onclick = () => { call("agent_answer", a.id, { choice: [...picked] }); H.hideCard(); };
-        }, { sticky: true, history: { app: a.name, title: "Question", text: a.question || "" } });
+        }, { sticky: true, history: agentHist(a, "Question", a.question || "") });
     } else if (a.kind === "plan") {
       popup("agent", `${head(`${a.name}: plan ready`)}<div class="plan scrolls">${esc(a.plan || "")}</div>
         <textarea class="fb" id="aFb" rows="1" placeholder="Feedback (optional), then Keep planning"></textarea>
@@ -520,13 +523,13 @@
           fb.addEventListener("keydown", (e) => e.stopPropagation());
           $("aGo").onclick = () => { call("agent_answer", a.id, "allow"); H.hideCard(); };
           $("aMore").onclick = () => { call("agent_answer", a.id, { deny: $("aFb").value || "Keep planning." }); H.hideCard(); };
-        }, { sticky: true, history: { app: a.name, title: "Plan", text: (a.plan || "").slice(0, 80) } });
+        }, { sticky: true, history: agentHist(a, "Plan", (a.plan || "").slice(0, 80)) });
     } else if (a.kind === "done") {
       popup("agent", `${mascot(a.tool, "done", true)}<div class="ct"><div class="t">${esc(a.name)} is done</div>
         <div class="body">${esc(a.summary || "Finished its turn")}</div>
         <div class="btns"><button class="pbtn go" id="aJump">Jump to it</button></div></div>`, 340, a.summary && a.summary.length > 44 ? 120 : 100, () => {
           $("aJump").onclick = () => { call("agent_jump", a.session); H.hideCard(); };
-        }, { history: { app: a.name, title: "Done", text: a.summary || "" } });
+        }, { history: agentHist(a, "Done", a.summary || "") });
     }
   }
   function agentEdit(e) {
@@ -699,11 +702,18 @@
   // ---------------------------------------------------------------- NOTIFICATIONS (pop-ups + history page)
   const letter = (app) => (app || "?").replace(/[^A-Za-z0-9]/g, "").slice(0, 1).toUpperCase() || "•";
   const APPC = { Discord: "#5865f2", Outlook: "#0a64d2", Mail: "#0a84ff", WhatsApp: "#25d366", Teams: "#5b5fc7", Telegram: "#2aa3df", Slack: "#4a154b", Steam: "#1b2838" };
+  // the picture: the sender's (a Discord avatar), else the app's own icon
+  // (the host reads it from Windows), with the app's icon as a small badge
+  // on the sender's picture; a letter only when Windows has no icon
+  function notifPic(n, cls) {
+    if (n.icon) return `<span class="${cls}"><img src="${esc(n.icon)}" alt="">${n.appIcon ? `<img class="app-badge" src="${esc(n.appIcon)}" alt="">` : ""}</span>`;
+    if (n.appIcon) return `<span class="${cls} app"><img src="${esc(n.appIcon)}" alt=""></span>`;
+    return `<span class="${cls}" style="background:${APPC[n.app] || "#3a3a3c"};color:#fff">${esc(letter(n.app))}</span>`;
+  }
   function notif(n) {
-    const icon = n.icon ? `<img src="${esc(n.icon)}" alt="">` : letter(n.app);
-    popup("notif", `<div class="ic-sq" style="background:${APPC[n.app] || "#3a3a3c"};color:#fff">${icon}</div>
+    popup("notif", `${notifPic(n, "ic-sq")}
       <div class="ct"><div class="s">${esc(n.app)}</div><div class="t">${esc(n.title || n.app)}</div>${n.text ? `<div class="body">${esc(n.text)}</div>` : ""}</div>`,
-      340, n.text ? 96 : 72, null, { history: { app: n.app, title: n.title, text: n.text, icon: n.icon || "" } });
+      340, n.text ? 96 : 72, null, { history: { app: n.app, title: n.title, text: n.text, icon: n.icon || "", appIcon: n.appIcon || "" } });
   }
   // Hop's own pop-ups in the list: their icon, not a letter
   const OWN = { Downloads: ["download", "#64d2ff"], Scores: ["ball-football", "#30d158"], Reminder: ["bell", "#a5a3ff"], Weather: ["cloud-rain", "#5ac8fa"],
@@ -713,7 +723,9 @@
     const rows = $("alRows");
     if (!rows) return;
     rows.innerHTML = state.history.length ? state.history.slice(0, 20).map((h) => `<div class="row nrow">
-        <span class="n-ic${OWN[h.app] ? " own" : ""}" style="--c:${(OWN[h.app] || [])[1] || APPC[h.app] || "#8e8e93"}">${h.icon ? `<img src="${esc(h.icon)}" alt="">` : OWN[h.app] ? ICON(OWN[h.app][0], 16) : esc(letter(h.app))}</span>
+        ${h.logo && LOGO[h.logo] ? `<span class="n-ic app logo">${LOGO[h.logo]}</span>`
+          : h.icon || h.appIcon ? notifPic(h, "n-ic")
+          : `<span class="n-ic${OWN[h.app] ? " own" : ""}" style="--c:${(OWN[h.app] || [])[1] || APPC[h.app] || "#8e8e93"}">${OWN[h.app] ? ICON(OWN[h.app][0], 16) : esc(letter(h.app))}</span>`}
         <div class="grow"><div class="t1"><span class="n-app">${esc(h.app || "")}</span><span class="tm">${H.ago(h.at / 1000)}</span></div>
           <div class="t2"><b>${esc(h.title || h.app)}</b>${h.text ? " · " + esc(h.text) : ""}</div></div></div>`).join("")
       : `<div class="empty-note">No notifications yet</div>`;

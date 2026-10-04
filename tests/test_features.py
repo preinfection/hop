@@ -173,6 +173,16 @@ def test_sessions_follow_claude_codes_own_list(tmp_path):
     assert not hub.sync(root)                                                           # nothing new: no push
 
 
+def test_notifications_get_the_apps_own_icon():
+    """A letter tile ("E") stood in for every app; Windows has their icons."""
+    import watch
+    ps = r"{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe"  # System32, on every PC
+    url = watch.app_icon(ps)
+    assert url.startswith("data:image/png;base64,") and len(url) > 500
+    assert watch.app_icon(ps) is url                                                    # cached per app
+    assert watch.app_icon("no.such.app.anywhere") == ""                                 # the page falls back to a letter
+
+
 def test_usage_backs_off_when_told_too_many_requests():
     """A 429 from the usage server: wait what it asks, else 5 min doubling to 30."""
     assert [features.usage_backoff(n) for n in (1, 2, 3, 4, 9)] == [300, 600, 1200, 1800, 1800]
