@@ -188,6 +188,7 @@ class AgentHub:
         self.pending = {}                                          # id -> [Event, answer]
         self.lock = threading.Lock()
         self.usage = None
+        self.usage_soon = False                                    # a reply just finished: read the usage again
 
     def public(self):
         order = {"ask": 0, "work": 1, "done": 2, "idle": 3}
@@ -278,6 +279,7 @@ class AgentHub:
             msg = d.get("message", "")
             s.update(status="ask" if "permission" in msg.lower() else "idle", detail=msg[:100] or "Waiting for you")
         elif ev == "Stop":
+            self.usage_soon = True
             summary = last_reply(d.get("transcript_path"))
             s.update(status="done", detail=summary or "Finished")
             if not (L.get("agentSuppress", True) and self.f.terminal_in_front(s)):
@@ -326,17 +328,111 @@ class AgentHub:
             return
         srv.serve_forever()
 
+    def sync(self, root=None):
+        """Match Claude Code's own list of running sessions (~/.claude/sessions,
+        one file per open window): a window closed without SessionEnd (killed,
+        crashed, the PC slept) is dropped, one opened before the island started
+        is added, and each is named after the folder it was started in."""
+        live = live_claude_sessions(root)
+        if live is None:
+            return False                                    # an older Claude Code: hooks only
+        changed = False
+        now = time.time()
+        with self.lock:
+            for sid, s in list(self.sessions.items()):
+                if s["tool"] == "claude" and sid not in live and now - s["at"] > 5:
+                    del self.sessions[sid]
+                    changed = True
+            for sid, x in live.items():
+                name = os.path.basename(x["cwd"].rstrip("\\/")) or "Claude"
+                s = self.sessions.get(sid)
+                if s is None:
+                    busy = x["status"] == "busy"
+                    self.sessions[sid] = {"id": sid, "tool": "claude", "name": name, "status": "work" if busy else "idle",
+                                          "detail": "Working" if busy else "Waiting for you", "cwd": x["cwd"], "at": now - 6}
+                    changed = True
+                elif s["name"] != name:
+                    s["name"] = name
+                    changed = True
+        if changed:
+            self._push()
+        return changed
+
+    def sync_loop(self):
+        while True:
+            try:
+                self.sync()
+            except Exception as e:
+                extras.log("agent sync", repr(e))
+            time.sleep(4)
+
     def usage_loop(self):
         """Claude plan usage (5-hour and weekly), only when switched on: read
         with Claude Code's own sign-in from ~/.claude/.credentials.json."""
+        # every minute, and soon after a reply finishes (that's when it moves),
+        # never more than once in 20 s
+        last = 0.0
         while True:
-            if self.f.L().get("usagePill"):
+            on = self.f.L().get("usagePill")
+            now = time.time()
+            if not on:
+                last = 0.0                                  # switched on again: fetch at once
+            elif now - last >= 60 or (self.usage_soon and now - last >= 20):
+                last, self.usage_soon = now, False
                 try:
                     self.usage = claude_usage()
                     self._push()
                 except Exception as e:
                     extras.log("usage", repr(e))
-            time.sleep(300)
+            time.sleep(3)
+
+
+def _proc_start(pid):
+    """The process's creation time as a FILETIME number, or None if it has exited."""
+    k = ctypes.windll.kernel32
+    h = k.OpenProcess(0x1000, False, int(pid))                 # QUERY_LIMITED_INFORMATION
+    if not h:
+        return None
+    try:
+        code = wt.DWORD()
+        if not k.GetExitCodeProcess(h, ctypes.byref(code)) or code.value != 259:   # STILL_ACTIVE
+            return None
+        c, e, kt, ut = (wt.FILETIME() for _ in range(4))
+        if not k.GetProcessTimes(h, ctypes.byref(c), ctypes.byref(e), ctypes.byref(kt), ctypes.byref(ut)):
+            return 0
+        return (c.dwHighDateTime << 32) | c.dwLowDateTime
+    finally:
+        k.CloseHandle(h)
+
+
+def live_claude_sessions(root=None):
+    """{sessionId: {cwd, status}} for the Claude Code windows open right now,
+    from the files it keeps in ~/.claude/sessions (named <pid>.json). A file
+    whose process is gone, or whose pid now belongs to another program, is
+    skipped. None when there is no such folder."""
+    root = root or os.path.join(os.path.expanduser("~"), ".claude", "sessions")
+    if not os.path.isdir(root):
+        return None
+    out = {}
+    for n in os.listdir(root):
+        if not n.endswith(".json"):
+            continue
+        try:
+            with open(os.path.join(root, n), encoding="utf-8") as fh:
+                d = json.load(fh)
+            pid, sid = int(d.get("pid") or n[:-5]), str(d.get("sessionId") or "")
+        except (OSError, ValueError, TypeError, AttributeError):
+            continue
+        if not sid:
+            continue
+        started = _proc_start(pid)
+        if started is None:
+            continue
+        want = str(d.get("procStart") or "")
+        if started and want.isdigit() and abs(started - int(want)) > 10_000_000:   # > 1 s apart: the pid was reused
+            continue
+        out[sid] = {"cwd": str(d.get("cwd") or ""), "status": str(d.get("status") or "")}
+    return out
 
 
 def claude_usage():
@@ -661,7 +757,7 @@ class Features:
     def start(self):
         os.makedirs(EXT_DIR, exist_ok=True)
         self._seed_extensions()
-        for target in (self.agents.serve, self.agents.usage_loop, self.watch_loop, self.notif_loop, self.calendar_loop,
+        for target in (self.agents.serve, self.agents.usage_loop, self.agents.sync_loop, self.watch_loop, self.notif_loop, self.calendar_loop,
                        self.sports_loop, self.rain_loop, self.scrobble_loop, self.monitor_loop):
             threading.Thread(target=self._safe, args=(target,), daemon=True).start()
 

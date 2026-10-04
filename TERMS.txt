@@ -37,8 +37,10 @@ share one yourself.
 
 OTHER THINGS HOP READS ON YOUR PC, AND NEVER SENDS ANYWHERE: your Windows
 notifications (to show them as pop-ups), the name of the app in front,
-the song playing, new files in Downloads and Screenshots, and text you
-copy (kept in memory only for clipboard history, gone when Hop closes).
+the song playing, new files in Downloads and Screenshots, text you
+copy (kept in memory only for clipboard history, gone when Hop closes),
+and which Claude Code windows are open (from Claude Code's own files in
+your user folder), so the AI agents page lists only the open ones.
 
 
 =========================================================================

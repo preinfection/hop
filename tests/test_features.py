@@ -148,6 +148,52 @@ def test_session_status_and_edits():
     assert hub.public()["sessions"] == []
 
 
+def _session_file(root, pid, sid, cwd, status="idle", proc_start=None):
+    with open(os.path.join(root, f"{pid}.json"), "w", encoding="utf-8") as fh:
+        json.dump({"pid": pid, "sessionId": sid, "cwd": cwd, "status": status,
+                   "procStart": str(proc_start if proc_start is not None else features._proc_start(pid) or "")}, fh)
+
+
+def test_sessions_follow_claude_codes_own_list(tmp_path):
+    """The island showed 3 sessions with 2 Claude Code windows open: one had
+    closed without SessionEnd. Claude Code's ~/.claude/sessions is the truth."""
+    root = str(tmp_path)
+    me = os.getpid()
+    _session_file(root, me, "live", r"C:\Users\you\projects\hop", "busy")
+    _session_file(root, 4_000_000, "gone", r"C:\Users\you")                          # no such process
+    f = FakeFeatures()
+    hub = features.AgentHub(f, wait=1)
+    for sid, cwd in (("gone", r"C:\Users\you"), ("live", r"C:\Users\you\.claude\memory")):
+        hub.handle({"hook_event_name": "PreToolUse", "session_id": sid, "cwd": cwd, "tool_name": "Bash", "tool_input": {"command": "ls"}})
+    for s in hub.sessions.values():
+        s["at"] -= 10                                                                   # their last hook was a while ago
+    assert hub.sync(root)
+    got = hub.public()["sessions"]
+    assert [(s["id"], s["name"]) for s in got] == [("live", "hop")]                    # named after where it started
+    assert not hub.sync(root)                                                           # nothing new: no push
+
+
+def test_open_session_without_hooks_yet_is_listed(tmp_path):
+    root = str(tmp_path)
+    _session_file(root, os.getpid(), "quiet", r"C:\code\mutate", "idle")
+    hub = features.AgentHub(FakeFeatures(), wait=1)
+    hub.sync(root)
+    assert hub.public()["sessions"] == [{"id": "quiet", "tool": "claude", "name": "mutate", "status": "idle", "detail": "Waiting for you"}]
+
+
+def test_reused_pid_is_not_a_live_session(tmp_path):
+    _session_file(str(tmp_path), os.getpid(), "old", r"C:\x", proc_start=1)            # the pid now belongs to another program
+    assert features.live_claude_sessions(str(tmp_path)) == {}
+
+
+def test_a_fresh_hook_is_not_dropped_before_its_file_appears(tmp_path):
+    hub = features.AgentHub(FakeFeatures(), wait=1)
+    hub.handle({"hook_event_name": "SessionStart", "session_id": "new", "cwd": r"C:\code\hop"})
+    hub.sync(str(tmp_path))
+    assert [s["id"] for s in hub.public()["sessions"]] == ["new"]
+    assert features.live_claude_sessions(str(tmp_path / "missing")) is None
+
+
 @pytest.mark.parametrize("answer,behavior", [("allow", "allow"), ("deny", "deny"), ({"deny": "Use rg instead"}, "deny")])
 def test_permission_answered_on_the_island(answer, behavior):
     f = FakeFeatures()
