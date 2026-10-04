@@ -369,6 +369,33 @@ def _run_dirs():
         return []
 
 
+def piece_times(run_dir):
+    """{piece file name: (start, end)} in the run's stream time, for its
+    finished pieces (the newest line wins: names wrap around the ring)."""
+    out = {}
+    try:
+        with open(os.path.join(run_dir, "pieces.csv"), encoding="utf-8") as fh:
+            for line in fh:
+                parts = line.strip().split(",")
+                if len(parts) >= 3:
+                    try:
+                        out[parts[0]] = (float(parts[1]), float(parts[2]))
+                    except ValueError:
+                        pass
+    except OSError:
+        pass
+    return out
+
+
+def run_t0(run_dir):
+    """The wall-clock time of the run's stream time 0, or None (an older run)."""
+    try:
+        with open(os.path.join(run_dir, "t0"), encoding="utf-8") as fh:
+            return float(fh.read().strip())
+    except (OSError, ValueError):
+        return None
+
+
 def _all_pieces():
     """Every non-empty ring piece of every recent run, oldest first."""
     out = []
@@ -553,6 +580,10 @@ def start_ffmpeg(audio_t0, ring_dir, hwnd=None):
     MIC_TRACK = bool(cfg["micTrack"])
     with open(os.path.join(ring_dir, "tracks"), "w") as fh:
         fh.write("2" if MIC_TRACK else "1")
+    # where this run's stream time 0 is on the wall clock (the first audio
+    # sample), so an F8 press can be found in the pieces; see Press.take
+    with open(os.path.join(ring_dir, "t0"), "w") as fh:
+        fh.write(repr(audio_t0))
     audio_split = ("[1:a]pan=stereo|c0=c0|c1=c1[sa];[1:a]pan=stereo|c0=c2|c1=c3[ma];" if MIC_TRACK else "")
     audio_maps = (["-map", "[sa]", "-map", "[ma]", "-metadata:s:a:0", "title=System", "-metadata:s:a:1", "title=Microphone"]
                   if MIC_TRACK else ["-map", "1:a"])
@@ -605,6 +636,10 @@ def start_ffmpeg(audio_t0, ring_dir, hwnd=None):
         # being written is finished properly instead of cut off mid-frame.
         "-shortest",
         "-f", "segment", "-segment_time", str(SEG), "-segment_wrap", str(PIECES),
+        # each finished piece's start and end in stream time (kept although
+        # the pieces' own timestamps are reset): where F8 falls; see Press.take
+        "-segment_list", os.path.join(ring_dir, "pieces.csv"), "-segment_list_type", "csv",
+        "-segment_list_size", str(PIECES * 2),
         "-segment_format", "mpegts", "-reset_timestamps", "1",
         os.path.join(ring_dir, "p%03d.ts"),
     ]
@@ -973,9 +1008,11 @@ def _tracks(run_dir):
         return "1"
 
 
-def snapshot():
+def snapshot(pressed=None):
     """Copy the newest minute of the ring (including the piece being written
-    right now) aside, so later cuts end exactly at this moment."""
+    right now) aside. With `pressed` (the F8 time) and the run's piece times,
+    it also writes how many seconds of the copy come after the press ("tail"),
+    so every cut ends exactly at F8."""
     pieces = [p for p in _all_pieces() if os.path.getsize(p) > 0][-(LONGEST // SEG + 2):]   # across runs
     # A run with a different number of audio tracks (the mic track was switched
     # on or off) can't be joined to this one: those pieces are left out.
@@ -997,7 +1034,42 @@ def snapshot():
         fh.writelines(f"file '{i:03d}.ts'\n" for i in range(len(pieces)))
     run_ff(["-f", "concat", "-safe", "0", "-i", os.path.join(snap, "list.txt"), "-map", "0", "-c", "copy",
             os.path.join(snap, "all.ts")])
+    if pressed is not None:
+        tail = _tail_after(pieces, snap, pressed)
+        if tail is not None:
+            with open(os.path.join(snap, "tail"), "w") as fh:
+                fh.write(f"{tail:.3f}")
     return snap
+
+
+def _tail_after(pieces, snap, pressed):
+    """Seconds of the snapshot after the F8 press: from the press to the end
+    of the finished piece holding it (its times in pieces.csv), plus every
+    copied piece after that one (normally the one still being written,
+    measured in the copy). None when the press can't be placed."""
+    run = os.path.dirname(pieces[-1])
+    t0, times = run_t0(run), piece_times(run)
+    if t0 is None or not times:
+        return None
+    at = pressed - t0
+    for k, p in enumerate(pieces):
+        span = times.get(os.path.basename(p)) if os.path.dirname(p) == run else None
+        if span and span[0] <= at < span[1]:
+            after = 0.0
+            for i in range(k + 1, len(pieces)):
+                d = _duration(os.path.join(snap, f"{i:03d}.ts"))
+                if d is None:
+                    return None
+                after += d
+            return (span[1] - at) + after
+    return None
+
+
+def _duration(path):
+    try:
+        return float(_probe(["-show_entries", "format=duration", "-of", "csv=p=0", path]).strip())
+    except ValueError:
+        return None
 
 
 WATERMARK = os.path.join(HERE, "watermark.png")   # "recorded with" + the bunny, top middle
@@ -1032,6 +1104,11 @@ def cut(snap, seconds, stamp, game=None):
     if end is None:
         return None
     stop_at = end - TAIL_S
+    try:
+        with open(os.path.join(snap, "tail"), encoding="utf-8") as fh:
+            stop_at = end - float(fh.read())               # exactly at F8 (see snapshot)
+    except (OSError, ValueError):
+        pass                                              # an older snapshot: the old reckoning
     want = stop_at - seconds
     keys = _keyframes(source)
     start = max([k for k in keys if k <= want + 0.001], default=keys[0] if keys else begin)
@@ -1192,7 +1269,8 @@ def clip_place(game):
     return folder, prefix
 
 
-TAIL_S = 1.0   # how long after F8 the snapshot is taken; see Press.take
+TAIL_S = 1.0   # how long after F8 the snapshot is taken at the least; see Press.take
+PRESS_WAIT_S = 6.0   # the longest a press waits for the ring piece holding it
 
 
 class Press:
@@ -1230,9 +1308,24 @@ class Press:
         self.on_change = on_change
 
     def take(self):
-        """The snapshot, TAIL_S after the press (see the class note)."""
+        """The snapshot, once the ring piece holding the press is finished
+        (pieces.csv lists it): only then is the picture up to F8 really on
+        disk. Waiting a fixed TAIL_S and assuming the copy ended TAIL_S after
+        the press cut clips 2-3 s short: the piece being written reaches the
+        disk in 256 KB bursts and the encoder runs behind (2026-10-04). Older
+        runs (no pieces.csv) keep the TAIL_S wait."""
         time.sleep(max(0.0, self.pressed + TAIL_S - time.time()))
-        self.snap = snapshot()
+        deadline = self.pressed + PRESS_WAIT_S
+        while time.time() < deadline:
+            newest = _newest_piece()
+            run = os.path.dirname(newest) if newest else None
+            t0 = run_t0(run) if run else None
+            if t0 is None:
+                break
+            if any(e > self.pressed - t0 + 0.05 for _, e in piece_times(run).values()):
+                break
+            time.sleep(0.05)
+        self.snap = snapshot(self.pressed)
         self.ready.set()
         if not self.snap:
             self.busy = False                             # "nothing recorded yet"

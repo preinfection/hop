@@ -219,6 +219,93 @@ def record(seconds=5.0):
     return ring
 
 
+RED_SQUARE = r"""
+import ctypes, sys, time, ctypes.wintypes as wt
+u, g = ctypes.windll.user32, ctypes.windll.gdi32
+u.CreateWindowExW.restype = wt.HWND
+u.DefWindowProcW.argtypes = [wt.HWND, wt.UINT, wt.WPARAM, wt.LPARAM]
+u.DefWindowProcW.restype = ctypes.c_ssize_t
+PROC = ctypes.WINFUNCTYPE(ctypes.c_ssize_t, wt.HWND, wt.UINT, wt.WPARAM, wt.LPARAM)
+proc = PROC(lambda h, m, w, l: u.DefWindowProcW(h, m, w, l))
+class WC(ctypes.Structure):
+    _fields_ = [("style", wt.UINT), ("proc", PROC), ("a", ctypes.c_int), ("b", ctypes.c_int), ("inst", wt.HINSTANCE), ("icon", wt.HANDLE),
+                ("cur", wt.HANDLE), ("bg", wt.HANDLE), ("menu", wt.LPCWSTR), ("name", wt.LPCWSTR)]
+g.CreateSolidBrush.restype = wt.HANDLE
+u.RegisterClassW(ctypes.byref(WC(0, proc, 0, 0, None, None, None, g.CreateSolidBrush(0x0000FF), None, "hopRed")))
+EX = 0x08000000 | 0x00000020 | 0x00000080 | 0x00000008          # NOACTIVATE|TRANSPARENT|TOOLWINDOW|TOPMOST
+h = u.CreateWindowExW(EX, "hopRed", "hop-test-red", 0x80000000, 0, 0, 40, 40, None, None, None, None)
+u.ShowWindow(h, 4); u.UpdateWindow(h)
+end = time.time() + %f
+print(repr(time.time()), flush=True)                            # the moment it is on screen
+msg = wt.MSG()
+while time.time() < end:
+    while u.PeekMessageW(ctypes.byref(msg), None, 0, 0, 1):
+        u.DispatchMessageW(ctypes.byref(msg))
+    time.sleep(0.01)
+u.DestroyWindow(h)
+"""
+
+
+@pytest.mark.slow
+def test_a_clip_ends_exactly_at_f8(sandbox, monkeypatch):
+    """The user's clip stopped ~3 s before F8: the press waited a fixed 1 s
+    and assumed the copy ended 1 s after it, but the piece being written
+    reaches the disk in bursts and the encoder runs behind. A red square goes
+    up on screen, F8 lands 0.6 s later: the clip's last 0.6 s must be red."""
+    import sys
+    write_settings(fps=30, quality="small", watermark=False)
+    monkeypatch.setattr(C, "SAVE_DIR", os.path.join(sandbox, "clips"))
+    beat = subprocess.Popen([sys.executable, "-c", HEARTBEAT % 20])
+    ring = C.new_ring_dir()
+    t0 = time.time()
+    ff = C.start_ffmpeg(t0, ring, None)
+    stop = threading.Event()
+
+    def feed():
+        block = b"\0" * (C.BLOCK * C.CH * (2 if C.MIC_TRACK else 1) * 4)
+        n = 0
+        while not stop.is_set():
+            try:
+                ff.stdin.write(block)
+            except OSError:
+                return
+            n += 1
+            time.sleep(max(0, t0 + n * C.BLOCK / C.RATE - time.time()))
+    threading.Thread(target=feed, daemon=True).start()
+    try:
+        time.sleep(6.3)                                   # mid-piece, a few pieces in
+        red = subprocess.Popen([sys.executable, "-c", RED_SQUARE % 12], stdout=subprocess.PIPE, text=True)
+        shown = float(red.stdout.readline())
+        press = C.Press()
+        press.pressed = shown + 0.6
+        time.sleep(max(0, press.pressed - time.time()))
+        press.take()                                      # waits for the piece holding the press
+        assert press.snap and os.path.exists(os.path.join(press.snap, "tail"))
+        out = C.cut(press.snap, 3, "test-f8")
+    finally:
+        stop.set()
+        C.stop_ffmpeg(ff)
+        beat.kill()
+        try:
+            red.kill()
+        except Exception:
+            pass
+    assert out and os.path.exists(out)
+    # the top-left corner of every frame: red or not, from the end backwards
+    raw = subprocess.run([C.FFMPEG, "-v", "error", "-i", out, "-vf", "crop=6:6:4:4,scale=1:1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+                         capture_output=True).stdout
+    px = [raw[i:i + 3] for i in range(0, len(raw) - 2, 3)]
+    reds = [p[0] > 170 and p[1] < 90 and p[2] < 90 for p in px]
+    tail_red = 0
+    for r_ in reversed(reds):
+        if not r_:
+            break
+        tail_red += 1
+    secs = tail_red / 30
+    assert any(reds), "the red square never made it into the clip: it ends before F8"
+    assert 0.4 <= secs <= 0.85, f"the clip's last {secs:.2f} s are red; F8 came 0.6 s after the square"
+
+
 COMBOS = list(itertools.product([30, 60, 120], ["best", "high", "small"], [True, False], [True, False]))
 
 
