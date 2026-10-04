@@ -32,7 +32,10 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.17763
 CloseApplications=yes
-LicenseFile=..\LICENSE
+; The Terms of Use and Privacy Policy: the wizard's "I accept the agreement"
+; page, which has to be accepted before Next works. Kept in step with
+; gethop.lol/terms and /privacy.
+LicenseFile=..\TERMS.txt
 
 [Types]
 Name: "both"; Description: "Hop Island and Hop Clipper"
@@ -62,6 +65,7 @@ Source: "{#Dist}\HopIsland\*"; DestDir: "{app}\Island"; Components: island; Flag
 Source: "{#Dist}\HopClipper\*"; DestDir: "{app}\Clipper"; Components: clipper; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#Dist}\ffmpeg\*"; DestDir: "{app}\ffmpeg"; Components: clipper; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\TERMS.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\THIRD-PARTY-NOTICES.md"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]

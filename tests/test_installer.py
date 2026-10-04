@@ -118,7 +118,7 @@ def test_install_components(target, components, record_property):
     try:
         for rel, expected in CASES[components].items():
             assert os.path.exists(os.path.join(target, rel)) is expected, rel
-        for rel in ("LICENSE", "THIRD-PARTY-NOTICES.md", "unins000.exe"):
+        for rel in ("LICENSE", "TERMS.txt", "THIRD-PARTY-NOTICES.md", "unins000.exe"):
             assert os.path.exists(os.path.join(target, rel))
         if "clipper" in components:
             assert os.path.exists(os.path.join(target, "ffmpeg", "ffprobe.exe"))

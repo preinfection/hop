@@ -1,0 +1,99 @@
+HOP TERMS OF USE AND PRIVACY POLICY
+Hop Island and Hop Clipper, by preinfection
+Last updated: October 4, 2026
+Full versions: https://gethop.lol/terms and https://gethop.lol/privacy
+
+Please read this before installing. By choosing "I accept the agreement"
+and installing or using Hop, you agree to these terms. If you do not agree,
+choose "I do not accept" and do not install Hop.
+
+
+=========================================================================
+PART 1: PRIVACY, IN SHORT
+=========================================================================
+
+Hop has no accounts, no analytics, no telemetry, no ads and no tracking.
+The apps do not send us your data, and we do not sell or share any.
+Everything Hop reads stays on your PC, except what a feature you turned
+on has to send to the service it uses (listed in the full privacy policy).
+
+LOCATION. Hop does not use GPS, the Windows Location service, or your IP
+address to find where you are. Weather, rain alerts and prayer times use
+only the city you type in yourself.
+
+Windows 11 may show "Location in use by: Network Command Shell" (netsh)
+or by Hop Island. Windows treats the NAME of your Wi-Fi network as
+location data, and Hop Island reads that name so it can show a pop-up
+when your Wi-Fi connects or drops. The name never leaves your PC.
+Turn off the Wi-Fi pop-up in Hop Island's settings and Hop stops reading it.
+
+MICROPHONE AND CAMERA. Hop Island never records your microphone or camera.
+It only checks WHICH apps are using them, to show the privacy dot. Hop
+Clipper records your screen and desktop sound into memory so F8 can save
+the last moments. It records your microphone only if you turn on the
+microphone option. Nothing is saved until you press F8, clips are saved
+only to the folder you chose, and they are never uploaded unless you
+share one yourself.
+
+OTHER THINGS HOP READS ON YOUR PC, AND NEVER SENDS ANYWHERE: your Windows
+notifications (to show them as pop-ups), the name of the app in front,
+the song playing, new files in Downloads and Screenshots, and text you
+copy (kept in memory only for clipboard history, gone when Hop closes).
+
+
+=========================================================================
+PART 2: TERMS OF USE
+=========================================================================
+
+1. THE SOFTWARE. Hop is free, open-source software released under the MIT
+   License (included in the install folder as LICENSE). These terms add
+   to that license; they do not take away any right it gives you.
+
+2. NO WARRANTY. Hop is in early development and is provided "AS IS",
+   without warranty of any kind, express or implied, including fitness for
+   a particular purpose and non-infringement. Hop may have bugs, may stop
+   working, and may lose clips or settings. Keep copies of what matters.
+
+3. LIMITATION OF LIABILITY. To the fullest extent the law allows, the
+   authors and preinfection are not liable for any damages, data loss,
+   lost profits or other harm arising from installing or using Hop, or
+   from being unable to use it.
+
+4. YOUR RESPONSIBILITY WHEN RECORDING. You are responsible for what you
+   record and share with Hop Clipper. Follow the laws where you live,
+   including laws on recording other people, voice and video calls,
+   copyrighted content, and the rules of games and platforms you use.
+   Get consent where the law requires it.
+
+5. THIRD-PARTY SERVICES. Some optional features use outside services
+   (weather, prayer times, lyrics, album art, sports scores, calendars,
+   Last.fm, Anthropic, Cloudflare, GitHub). Those services are not run by
+   us, and their own terms and privacy policies apply. We are not
+   responsible for them, for their availability or for their content.
+
+6. FILE SHARING. If you drop a file on Hop Island to share it, it is
+   uploaded to mutate.lol. Anonymous uploads are public to anyone with
+   the link and delete themselves after 7 days. Do not upload anything
+   illegal, anything you don't have the right to share, or other people's
+   private information. Uploads may be removed at any time.
+
+7. EXTENSIONS. Extensions are code written by other people. Install only
+   extensions you trust; we do not review them and are not responsible
+   for what they do.
+
+8. UPDATES. Hop checks GitHub for new versions at start and once a day.
+   Installing an update is always your choice.
+
+9. TRADEMARKS. Hop is not affiliated with or endorsed by Apple, Microsoft,
+   Spotify, Discord, Anthropic, ESPN or any other company whose apps or
+   services it works with. Their names belong to their owners.
+
+10. CHANGES. These terms may change. The current version is always at
+    https://gethop.lol/terms, and the date at the top shows the latest
+    change. Continuing to use Hop after a change means you accept it.
+
+11. STOPPING. You can stop at any time by uninstalling Hop (Windows
+    Settings > Apps > Installed apps > Hop > Uninstall).
+
+12. CONTACT. Questions or concerns:
+    https://github.com/preinfection/hop/issues
