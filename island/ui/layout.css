@@ -1,0 +1,178 @@
+/* The open island's layout (loaded after features.css), modelled on
+   shobhit99/SuperIsland's home screen: a row of round icon tabs on top, then
+   panels side by side split by thin dividers (no boxes), and its type scale
+   (15 / 14 / 11 / 10 px at 88 / 58 / 36 % white). Rebuilt for Hop; no code
+   was copied (that repository has no licence). */
+:root { --t1: rgba(255, 255, 255, 0.88); --t2: rgba(255, 255, 255, 0.58); --t3: rgba(255, 255, 255, 0.36); --div: rgba(255, 255, 255, 0.08); }
+html.boards .island.open { border-radius: 40px; }
+html.boards.notch .island.open { border-radius: 0 0 40px 40px; }
+html.boards .pg-dots { display: none; }
+
+/* ---- the top bar: a tab per page, then snap / refresh / settings */
+.topbar { display: none; }
+html.boards .topbar { position: absolute; top: 12px; left: 20px; right: 20px; height: 32px; display: flex;
+  justify-content: space-between; align-items: center; z-index: 4; }
+.topbar .tabs, .topbar .tb-right { display: flex; gap: 8px; }
+.topbar .tab, .topbar .tb, html.boards .gear.tb {
+  position: static; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; opacity: 1; pointer-events: auto;
+  color: rgba(255, 255, 255, 0.72); background: rgba(255, 255, 255, 0.01); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.035);
+  transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease, transform 120ms ease; }
+.topbar .tab:hover, .topbar .tb:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
+.topbar .tab.on { background: rgba(255, 255, 255, 0.05); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.95); }
+.topbar svg { width: 15px; height: 15px; }
+
+/* ---- panels: no boxes, thin dividers between them */
+.pg.pg-board { padding: 54px 24px 18px; }
+.pg-board .grid { gap: 14px 15px; }
+.tile { background: none !important; box-shadow: none !important; border-radius: 0 !important; overflow: visible; }
+.tile > .wg { padding: 0 2px; overflow: hidden; gap: 6px; }
+.tile.sep-l::before { content: ""; position: absolute; left: -8px; top: 4px; bottom: 4px; width: 1px; background: var(--div); }
+.tile.sep-t::after { content: ""; position: absolute; top: -7.5px; left: 2px; right: 2px; height: 1px; background: var(--div); }
+
+/* ---- type */
+.tile .ph { height: auto; margin-bottom: 4px !important; align-items: baseline; }
+.tile .ph > span:first-child, .tile .pg-head > span:first-child { font-size: 15px; font-weight: 600; color: var(--t1); letter-spacing: -0.01em; }
+.tile .ph .sub { font-size: 11px; font-weight: 500; color: var(--t2); }
+.tile .empty-note { font-size: 11px; font-weight: 500; color: var(--t3); }
+.tile .lnk, .tile .pg-head .link { background: rgba(255, 255, 255, 0.06); color: var(--t2); height: 22px; font-size: 11px; }
+
+/* ---- Now playing: title on top, artwork beside the controls, progress below */
+.tile .wg-music { display: grid !important; grid-template-columns: 74px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: "meta meta" "art ctl" "prog prog"; column-gap: 16px; row-gap: 8px; align-items: center; padding: 0 2px !important; }
+.tile .wg-music .head { display: contents; }
+.tile .wg-music .meta { grid-area: meta; min-width: 0; padding-right: 32px; }
+.tile .wg-music .title { font-size: 15px; color: var(--t1); }
+.tile .wg-music .artist { font-size: 11px; font-weight: 500; color: var(--t2); margin-top: 2px; }
+.tile .wg-music .lyric, .tile .wg-music .next-prayer, .tile .wg-music .head-bars, .tile .wg-music .head-clock,
+.tile .wg-music .center { display: none !important; }
+.tile .wg-music .rec, .tile .wg-music .head-art { grid-area: art; width: 74px; height: 74px; border-radius: 14px; justify-self: start; }
+.tile .wg-music .rec { border-radius: 50%; width: 64px; height: 64px; justify-self: center; }
+.tile .wg-music .rec-dot { width: 28px; height: 28px; margin: -14px 0 0 -14px; }
+.tile .wg-music .controls { grid-area: ctl; justify-content: center; gap: 14px; margin: 0; }
+.tile .wg-music .controls button { width: 34px; height: 34px; border-radius: 50%; }
+.tile .wg-music .controls .play { width: 44px; height: 44px; background: rgba(255, 255, 255, 0.08); }
+.tile .wg-music .controls .play:hover { background: rgba(255, 255, 255, 0.14); }
+.tile .wg-music .controls button svg { width: 20px; height: 20px; }
+.tile .wg-music .controls .play svg { width: 22px; height: 22px; }
+.tile .wg-music .progress { grid-area: prog; gap: 8px; }
+.tile .wg-music .time { font: 500 10px/1 "Cascadia Mono", Consolas, ui-monospace, monospace; color: var(--t3); width: 34px; }
+.tile .wg-music .rail { height: 4px; }
+/* the volume button sits top right of the player; its slider drops DOWN under it */
+.tile .wg-music .vol-btn { top: 0 !important; right: 0 !important; left: auto !important; bottom: auto !important; width: 26px; height: 26px; }
+.tile .wg-music .vol-row { top: 32px !important; bottom: auto !important; right: 0 !important; left: auto !important; width: 190px; height: 36px;
+  z-index: 5; transform: translateY(-6px); }
+.vol .tile .wg-music .vol-row { transform: none; }
+@container (max-height: 120px) {
+  .wg-music { grid-template-columns: 52px minmax(0, 1fr) auto !important; grid-template-rows: 1fr !important; grid-template-areas: "art meta ctl" !important; }
+  .wg-music .rec, .wg-music .head-art { width: 52px !important; height: 52px !important; }
+  .wg-music .progress { display: none !important; }
+  .wg-music .controls { gap: 4px !important; }
+}
+
+/* ---- Next prayer */
+.tile .wg-prayer { justify-content: flex-start; gap: 2px; }
+.pn-next { display: flex; align-items: baseline; gap: 8px; }
+.pn-name { font-size: 18px; font-weight: 600; color: var(--t1); letter-spacing: -0.01em; }
+.pn-at { font-size: 14px; font-weight: 600; color: var(--hop-amber); }
+.pn-in { font-size: 11px; font-weight: 500; color: var(--t2); margin-bottom: 8px; }
+.pn-list { display: flex; flex-direction: column; gap: 3px; margin-top: auto; }
+.pn-list div { display: flex; justify-content: space-between; font-size: 11px; font-weight: 500; color: var(--t2); }
+.pn-list b { font: 500 10.5px/1.3 "Cascadia Mono", Consolas, ui-monospace, monospace; color: var(--t3); }
+.pn-list .nx, .pn-list .nx b { color: var(--hop-amber); }
+@container (max-height: 120px) {
+  .wg-prayer .pn-list { flex-direction: row; justify-content: space-between; }
+  .wg-prayer .pn-list div { flex-direction: column; align-items: center; }
+  .wg-prayer .pn-in { margin-bottom: 0; }
+  .wg-prayer .ph { display: none; }
+}
+
+/* ---- Weather */
+.tile .wg-weather { justify-content: flex-start; gap: 2px; }
+.wx-top { display: flex; align-items: center; gap: 8px; color: var(--t1); }
+.wx-top .wx-ic svg { width: 30px; height: 30px; stroke-width: 1.6; }
+.wx-t { font-size: 24px; font-weight: 600; color: var(--t1); letter-spacing: -0.02em; }
+.wx-desc { font-size: 11px; font-weight: 500; color: var(--t2); }
+.wx-city { margin-top: auto; font-size: 14px; font-weight: 600; color: var(--t1); }
+.wx-hl { display: flex; gap: 12px; margin-top: 4px; font-size: 11px; font-weight: 500; color: var(--t2); }
+.wx-hl span { display: inline-flex; align-items: center; gap: 3px; }
+.wx-hl svg { width: 13px; height: 13px; }
+.wx-hl span:first-child svg { color: var(--hop-orange); }
+.wx-hl span:last-child svg { color: #64d2ff; }
+@container (max-height: 120px) { .wg-weather .wx-city, .wg-weather .wx-hl { display: none; } }
+
+/* ---- Today: the date, then the Hijri date and what is coming */
+.tile .wg-today .today-r, .tile .wg-today .strip { display: none !important; }
+.td-date { display: none; }
+.tile .td-date { display: block; font-size: 15px; font-weight: 600; color: var(--t1); }
+.tile .wg-today { justify-content: flex-start !important; gap: 4px !important; }
+.tile .wg-today .hij { font-size: 11px; font-weight: 500; color: var(--t2); }
+.tile .wg-today .evt { font-size: 11px; color: var(--t2); line-height: 1.6; }
+.wx-ic svg, .sv svg { display: block; }
+.bigtemp { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+
+/* ---- rows (agents, calendar, notifications): roomy, no boxes, thin lines */
+.tile .rows { gap: 0; overflow-x: hidden; }
+.tile .scrolls { overflow-x: hidden; }
+.tile .row { background: none; border-radius: 0; padding: 7px 0; min-height: 0; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.tile .row:first-child { border-top: 0; padding-top: 2px; }
+.tile .row.click:hover { background: rgba(255, 255, 255, 0.03); }
+.tile .row .t1 { font-size: 13px; font-weight: 600; color: var(--t1); }
+.tile .row .t2 { font-size: 11px; font-weight: 500; color: var(--t2); margin-top: 2px; }
+.tile .row .tm { font: 500 10px/1.2 "Cascadia Mono", Consolas, ui-monospace, monospace; color: var(--t3); }
+.nrow { align-items: flex-start !important; gap: 10px !important; }
+.n-ic { width: 28px; height: 28px; border-radius: 8px; flex: none; display: grid; place-items: center; overflow: hidden;
+  font-size: 12px; font-weight: 700; color: #fff; background: color-mix(in srgb, var(--c) 70%, #000); }
+.n-ic img { width: 100%; height: 100%; object-fit: cover; }
+.nrow .t1 { display: flex; justify-content: space-between; gap: 8px; }
+.nrow .n-app { font-size: 11px; font-weight: 600; color: var(--t2); }
+.nrow .t2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--t2); font-size: 12px !important; }
+.nrow .t2 b { color: var(--t1); font-weight: 600; }
+.row.gone { opacity: 0; transform: translateX(18px); transition: opacity 200ms ease, transform 260ms cubic-bezier(.2, .8, .2, 1); }
+@container (max-width: 180px) { .nrow .tm { display: none; } .nrow .n-ic { width: 22px; height: 22px; border-radius: 6px; } }
+
+/* ---- pop-up icons: a line icon in its colour on a soft tint of it */
+.card .ic-chip { width: 44px; height: 44px; border-radius: 50%; flex: none; display: grid; place-items: center;
+  color: var(--c); background: color-mix(in srgb, var(--c) 16%, transparent); }
+.card .ic-chip svg { width: 22px; height: 22px; }
+.sh .pin { color: var(--hop-amber); display: flex; }
+/* clip thumbnails: the copy button's icon dead centre */
+.thumb .tcopy { display: grid; place-items: center; padding: 0; }
+.thumb .tcopy svg { display: block; }
+/* extensions: transparent frames (no white page behind them) */
+.tile .wg-ext iframe, .pg-ext iframe { color-scheme: normal; background: transparent; }
+
+/* ---- Today keeps its events in a narrow column; the timer's modes become icons */
+@container (min-height: 121px) { .wg-today #evts { display: block !important; } }
+@container (max-height: 120px) { .wg-today #evts { display: none !important; } }
+.tm-modes button { display: inline-flex; align-items: center; gap: 5px; }
+.tm-modes button svg { display: none; }
+@container (max-width: 180px) {
+  .wg-timer .tm-modes { display: inline-flex !important; }
+  .wg-timer .tm-modes button { width: 30px; padding: 0; justify-content: center; }
+  .wg-timer .tm-modes button span { display: none; }
+  .wg-timer .tm-modes button svg { display: block; }
+  .wg-timer .tm-row .lnk:not(.go) { display: inline-flex !important; }
+}
+.tile .wg-timer .tm-big { font-size: clamp(28px, 22cqh, 44px); letter-spacing: -0.02em; color: var(--t1); }
+.tile .wg-timer .tm-big.run { color: var(--hop-orange); }
+.island .tm-modes button svg { width: 14px; height: 14px; }
+@container (max-width: 180px) { .wg-timer [data-p] { display: none !important; } }
+
+/* ---- shuffle / repeat sit top right of the player, beside the volume button */
+.tile .wg-music .controls .sr { display: grid !important; position: absolute; top: 0; width: 26px; height: 26px; border-radius: 50%; }
+.tile .wg-music .controls .sr[hidden] { display: none !important; }
+.tile .wg-music #shuffle { right: 60px; }
+.tile .wg-music #repeat { right: 30px; }
+.tile .wg-music .meta { padding-right: 92px; }
+.tile .wg-music .controls .sr svg { width: 15px; height: 15px; }
+/* repeat one: a small "1" badge on the icon */
+.controls .sr .one { position: absolute; right: 1px; bottom: 1px; margin: 0; width: 11px; height: 11px; border-radius: 50%;
+  display: grid; place-items: center; font: 800 7.5px/1 system-ui, sans-serif; color: #000; background: var(--accent); }
+.controls .sr .one[hidden] { display: none; }
+
+/* a small timer (1 x 1): the time and Start only */
+@container (max-height: 120px) and (max-width: 180px) {
+  .wg-timer .tm-modes { display: none !important; }
+  .wg-timer .tm-row .lnk:not(.go) { display: none !important; }
+  .wg-timer { gap: 4px !important; }
+}

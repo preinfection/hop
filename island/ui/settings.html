@@ -479,7 +479,9 @@
                          "s-sports": "sports", "s-prompter": "prompter" };
   document.querySelectorAll("#islandPanel section").forEach((sec) => sec.addEventListener("pointerenter", () => {
     const id = SECTION_PAGE[sec.id]; if (!id || !L) return;
-    const i = L.pages.filter((p) => !L.hidden.includes(p)).indexOf(id);
+    // widget pages: the page that holds this widget (none: the preview stays where it is)
+    const i = L.pageMode === "boards" ? (L.boards || []).findIndex((b) => b.widgets.some((w) => w.w === id))
+      : L.pages.filter((p) => !L.hidden.includes(p)).indexOf(id);
     if (i >= 0 && i !== chipOn) showPage(i);
   }));
 

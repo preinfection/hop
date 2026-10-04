@@ -531,6 +531,36 @@ def monitors():
     return out
 
 
+def label_monitors(rects, current):
+    """Names for the screens, from where they sit (Windows' own arrangement):
+    the island's screen is "This monitor"; the others "Left monitor",
+    "Right monitor", "Top monitor", "Bottom monitor" (numbered when there are
+    two on one side). Returned left to right, then top to bottom."""
+    if not rects:
+        return []
+    cx = lambda r: (r[0] + r[2]) / 2
+    cy = lambda r: (r[1] + r[3]) / 2
+    me = rects[current]
+    out = []
+    for i, r in enumerate(rects):
+        if i == current:
+            side = "This"
+        else:
+            dx, dy = cx(r) - cx(me), cy(r) - cy(me)
+            side = ("Right" if dx > 0 else "Left") if abs(dx) >= abs(dy) else ("Bottom" if dy > 0 else "Top")
+        out.append({"index": i, "side": side, "x": cx(r), "y": cy(r)})
+    out.sort(key=lambda o: (o["x"], o["y"]))
+    for side in ("Left", "Right", "Top", "Bottom"):
+        same = [o for o in out if o["side"] == side]
+        if side in ("Left", "Top"):
+            same.reverse()                                   # the nearest one is "Left monitor", the next "Left monitor 2"
+        for n, o in enumerate(same):
+            o["label"] = f"{side} monitor" + (f" {n + 1}" if len(same) > 1 and n else "")
+    for o in out:
+        o.setdefault("label", "This monitor")
+    return [{"index": o["index"], "label": o["label"]} for o in out]
+
+
 def top_windows():
     """(hwnd, title, exe) of every visible top-level window with a title."""
     out = []
@@ -928,7 +958,7 @@ class Features:
         how = self.L().get("dropAction", "ask")
         if how == "shelf":
             self.shelf("add", path)
-            self.js("reminder", {"title": "On the shelf", "text": os.path.basename(path), "icon": "📌", "bg": "#3a3a3c", "app": "Shelf"})
+            self.js("reminder", {"title": "On the shelf", "text": os.path.basename(path), "icon": "pin", "bg": "#c7c7cc", "app": "Shelf"})
         elif how == "upload":
             self.i._upload(path)
         else:
@@ -1152,7 +1182,7 @@ class Features:
                 subprocess.Popen([path, "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART"], creationflags=NO_WINDOW)
             except Exception as e:
                 extras.log("install update", repr(e))
-                self.js("reminder", {"title": "Update failed", "text": "Opening the download page instead", "icon": "⚠️", "bg": "#5a1d1d", "app": "Hop"})
+                self.js("reminder", {"title": "Update failed", "text": "Opening the download page instead", "icon": "alert-triangle", "bg": "#ff9f0a", "app": "Hop"})
                 self.i.open_release()
         threading.Thread(target=go, daemon=True).start()
         return True
@@ -1257,6 +1287,10 @@ class FeatureApi:
         self._i.cfg["notes"] = str(text or "")[:20000]
         self._f.save()
         return True
+
+    def get_city(self):
+        loc = self._i.cfg.get("location") or {}
+        return loc.get("name") or (loc.get("label") or "").split(",")[0]
 
     def get_prompter(self):
         return self._i.cfg.get("prompter", "")

@@ -36,6 +36,30 @@
   };
   const rgb = (hex) => { const n = parseInt((hex || "#000000").slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
   const rgba = (hex, a) => `rgba(${rgb(hex).join(", ")}, ${a})`;
+  function darkEnough([r, g, b], maxL = 0.22) {
+    r /= 255; g /= 255; b /= 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+    if (l <= maxL) return [r * 255, g * 255, b * 255].map(Math.round);
+    const d = mx - mn, sat = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+    let h = 0;
+    if (d) h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h *= 60;
+    const c = (1 - Math.abs(2 * maxL - 1)) * sat, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = maxL - c / 2;
+    const [rr, gg, bb] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+    return [rr + m, gg + m, bb + m].map((v) => Math.round(v * 255));
+  }
+  // "Copy as CSS" (settings): the island's whole look as CSS anyone can paste
+  // into Custom CSS; !important so it wins over the settings it replaces
+  function themeCss() {
+    const st = root.style, keys = ["--w", "--h", "--w-wide", "--open-w", "--open-h", "--r-closed", "--r-open", "--isl-bg", "--isl-ring",
+                                   "--isl-glow", "--isl-font", "--dur", "--ease-w", "--spring"];
+    const Lx = L(), NL = "\n";
+    const vars = keys.filter((k) => st.getPropertyValue(k)).map((k) => `  ${k}: ${st.getPropertyValue(k).trim()} !important;`);
+    return ["/* Hop Island theme: paste into Settings > Look > Custom CSS */", ":root {", ...vars, "}",
+            Lx.accentMode === "custom" ? `.island { --accent: ${Lx.accentColor} !important; }` : "",
+            Lx.customCss || ""].filter(Boolean).join(NL) + NL;
+  }
+  window.addEventListener("message", (e) => { if (e.data && e.data.t === "themecss") e.source.postMessage({ t: "themecss", css: themeCss() }, "*"); });
   function applyLook(L) {
     const notch = L.style === "notch";
     const st = root.style;
@@ -50,11 +74,14 @@
     st.setProperty("--r-closed", rc + "px");
     st.setProperty("--r-open", ro + "px");
     const a = L.bgOpacity / 100;
-    const [r, g, b] = rgb(L.bg);
+    // the island's text is light: a light background would swallow it, so the
+    // colour keeps its hue but is darkened to at most 22 % lightness
+    const [r, g, b] = darkEnough(rgb(L.bg));
     const dark = `rgba(${r * 0.55 | 0}, ${g * 0.55 | 0}, ${b * 0.55 | 0}, ${a})`;
-    st.setProperty("--isl-bg", L.bgStyle === "gradient" ? `linear-gradient(180deg, ${rgba(L.bg, a)}, ${dark})`
-      : L.bgStyle === "tint" ? `linear-gradient(180deg, color-mix(in srgb, var(--accent) 22%, ${rgba(L.bg, a)}), ${rgba(L.bg, a)})`
-      : rgba(L.bg, a));
+    const base = `rgba(${r}, ${g}, ${b}, ${a})`;
+    st.setProperty("--isl-bg", L.bgStyle === "gradient" ? `linear-gradient(180deg, ${base}, ${dark})`
+      : L.bgStyle === "tint" ? `linear-gradient(180deg, color-mix(in srgb, var(--accent) 22%, ${base}), ${base})`
+      : base);
     st.setProperty("--isl-ring", L.border ? `inset 0 0 0 1px ${rgba(L.borderColor, L.borderOpacity / 100)}` : "0 0 0 0 transparent");
     st.setProperty("--isl-glow", L.glow ? "0 4px 22px -2px color-mix(in srgb, var(--accent) 55%, transparent)" : "0 0 0 0 transparent");
     st.setProperty("--isl-font", FONTS[L.font] || FONTS.inter);
@@ -134,11 +161,11 @@
     }
     if (slotted("battery")) {
       const b = state.battery;
-      NODES.battery.innerHTML = b && b.pct != null ? `${b.pct}<span class="u">%${b.charging ? "⚡" : ""}</span>` : "–";
+      NODES.battery.innerHTML = b && b.pct != null ? `${b.pct}<span class="u">%</span>${b.charging ? ICON("battery-charging", 14) : ""}` : "–";
     }
     if (slotted("weather")) {
       const w = H.today() && H.today().weather;
-      NODES.weather.textContent = w ? `${wxIcon(w.code)} ${Math.round(w.temp)}°` : "–";
+      NODES.weather.innerHTML = w ? `${wxIcon(w.code, 15)}${Math.round(w.temp)}°` : "–";
     }
     if (slotted("date")) {
       NODES.date.textContent = new Date(now()).toLocaleDateString(undefined, { weekday: "short", day: "numeric" });
@@ -174,7 +201,7 @@
     H.settlePill();
   }
   const speed = (bps) => bps >= 1e6 ? `${(bps / 1e6).toFixed(bps >= 1e7 ? 0 : 1)}M` : bps >= 1e3 ? `${Math.round(bps / 1e3)}K` : `${Math.round(bps || 0)}B`;
-  const wxIcon = (c) => c === 0 ? "☀️" : c <= 2 ? "🌤️" : c === 3 ? "☁️" : c <= 48 ? "🌫️" : c <= 67 ? "🌧️" : c <= 77 ? "❄️" : c <= 82 ? "🌦️" : "⛈️";
+  const wxIcon = (c, size) => window.ICON(c === 0 ? "sun" : c <= 3 ? "cloud" : c <= 48 ? "cloud-fog" : c <= 67 ? "cloud-rain" : c <= 77 ? "snowflake" : c <= 82 ? "cloud-rain" : "cloud-storm", size || 20);
 
   // tell the host what to watch, so it only polls what is on screen
   let needKey = "";
@@ -201,7 +228,7 @@
       }
       if (kind === "timer" && (timer.running || (timer.mode === "watch" && timer.elapsed > 0 && timer.running))) { text = fmtTimer(); color = "var(--hop-orange)"; break; }
       if (kind === "agent" && state.agents.some((s) => s.status === "ask")) { text = "Agent waiting"; color = "var(--hop-orange)"; pulse = true; break; }
-      if (kind === "focus" && state.focus) { text = "☾ Focus"; color = "var(--hop-purple)"; break; }
+      if (kind === "focus" && state.focus) { text = "Focus"; color = "var(--hop-purple)"; break; }
     }
     if (live.textContent !== text) live.textContent = text;
     live.style.setProperty("--live-c", color);
@@ -289,9 +316,15 @@
 
   // ================================================================ PAGES (built here, ordered by the layout)
   const PAGE_HTML = {
+    prayer: `<div class="ph"><span>Next prayer</span><span class="sub" id="pnCity"></span></div>
+      <div class="pn-next"><span class="pn-name" id="pnName">–</span><span class="pn-at" id="pnAt"></span></div>
+      <div class="pn-in" id="pnIn"></div><div class="pn-list" id="pnList"></div>`,
+    weather: `<div class="wx-top"><span class="wx-ic" id="wxIc"></span><span class="wx-t" id="wxT">–</span></div>
+      <div class="wx-desc" id="wxD"></div><div class="wx-city" id="wxCity"></div>
+      <div class="wx-hl" id="wxHL"></div>`,
     agents: `<div class="ph"><span>Agents</span><span class="sub" id="agSub"></span></div>
       <div class="rows scrolls" id="agRows"></div><div class="usage" id="agUsage" hidden></div>`,
-    timer: `<div class="tm-modes" id="tmModes"><button data-m="timer" class="on">Timer</button><button data-m="watch">Stopwatch</button><button data-m="pomo">Focus</button></div>
+    timer: `<div class="tm-modes" id="tmModes"><button data-m="timer" class="on" title="Timer">${ICON("alarm", 13)}<span>Timer</span></button><button data-m="watch" title="Stopwatch">${ICON("clock-hour-4", 13)}<span>Stopwatch</span></button><button data-m="pomo" title="Focus">${ICON("moon", 13)}<span>Focus</span></button></div>
       <div class="tm-big scrolls" id="tmBig" title="Scroll to change">5:00</div><div class="tm-sub" id="tmSub"></div>
       <div class="tm-row" id="tmRow"></div>`,
     calendar: `<div class="ph"><span id="calHead">Today</span><button class="lnk" id="calOpen">Open calendar</button></div><div class="rows scrolls" id="calRows"></div>`,
@@ -312,7 +345,47 @@
     pg.innerHTML = html;
     full.insertBefore(pg, dots);
   }
+  // ---------------------------------------------------------------- PRAYER and WEATHER widgets
+  const WX_TEXT = (c) => c === 0 ? "Clear" : c <= 2 ? "Partly cloudy" : c === 3 ? "Cloudy" : c <= 48 ? "Fog" : c <= 57 ? "Drizzle"
+    : c <= 67 ? "Rain" : c <= 77 ? "Snow" : c <= 82 ? "Showers" : "Thunderstorm";
+  let city = "";
+  call("get_city").then((c) => { city = c || ""; paintWeatherW(); paintPrayerW(); });
+  function paintWeatherW() {
+    const w = H.today() && H.today().weather;
+    if (!$("wxT")) return;
+    $("wxIc").innerHTML = w ? wxIcon(w.code, 30) : "";
+    $("wxT").textContent = w ? `${Math.round(w.temp)}°` : "–";
+    $("wxD").textContent = w ? WX_TEXT(w.code) : "No weather yet";
+    $("wxCity").textContent = city;
+    $("wxHL").innerHTML = w ? `<span>${ICON("sun", 13)} H ${Math.round(w.high)}°</span><span>${ICON("moon", 13)} L ${Math.round(w.low)}°</span>` : "";
+  }
+  function paintPrayerW() {
+    const pr = H.prayers();
+    if (!$("pnName")) return;
+    $("pnCity").textContent = city;
+    if (!pr || !pr.today) { $("pnName").textContent = "–"; $("pnIn").textContent = "Pick your city in settings"; $("pnList").innerHTML = ""; return; }
+    const names = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"], d = new Date(now());
+    const at = (hmS, plus = 0) => { const [h, m] = hmS.split(":").map(Number); const x = new Date(d); x.setDate(x.getDate() + plus); x.setHours(h, m, 0, 0); return x; };
+    let next = names.find((n) => at(pr.today[n]) > d), when = next ? at(pr.today[next]) : at((pr.tomorrow || pr.today).Fajr, 1);
+    next = next || "Fajr";
+    const mins = Math.max(0, Math.round((when - d) / 60000));
+    $("pnName").textContent = next;
+    $("pnAt").textContent = timeFmt.format(when);
+    $("pnIn").textContent = mins >= 60 ? `in ${Math.floor(mins / 60)} h ${mins % 60} min` : `in ${mins} min`;
+    $("pnList").innerHTML = names.map((n) => `<div class="${n === next ? "nx" : ""}"><span>${n}</span><b>${timeFmt.format(at(pr.today[n])).replace(/\s?[AP]M/i, "")}</b></div>`).join("");
+  }
+  function paintDate() {
+    const box = WG.today; if (!box) return;
+    let h = box.querySelector(".td-date");
+    if (!h) { h = document.createElement("div"); h.className = "td-date"; box.insertBefore(h, box.firstChild); }
+    h.textContent = new Date(now()).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+  }
+  setInterval(() => { paintPrayerW(); paintDate(); }, 30000);
+
   window.__hopPage = (id) => {
+    if (id === "prayer") paintPrayerW();
+    if (id === "weather") paintWeatherW();
+    if (id === "today") paintDate();
     if (id === "agents") paintAgents();
     if (id === "calendar") paintCalendar();
     if (id === "alerts") paintAlerts();
@@ -384,7 +457,17 @@
         360, 196, () => {
           document.querySelector(".card").classList.add("tall");
           const fb = $("aFb");
-          fb.addEventListener("input", () => { fb.style.height = "auto"; fb.style.height = Math.min(54, fb.scrollHeight) + "px"; H.fitCard(); });
+          // every new line makes the box (and the card) taller, up to the room the island has
+          fb.addEventListener("input", () => {
+            fb.style.height = "auto"; fb.style.height = fb.scrollHeight + "px";
+            const plan = document.querySelector(".card .plan");
+            plan.style.maxHeight = "";
+            H.fitCard();
+            requestAnimationFrame(() => {             // out of room: the plan text gives way (whole lines), the buttons stay
+              const c = document.querySelector(".card"), over = c.scrollHeight - c.clientHeight;
+              if (over > 0) plan.style.maxHeight = Math.max(32, Math.floor((plan.clientHeight - over) / 16) * 16 + 12) + "px";
+            });
+          });
           fb.addEventListener("keydown", (e) => e.stopPropagation());
           $("aGo").onclick = () => { call("agent_answer", a.id, "allow"); H.hideCard(); };
           $("aMore").onclick = () => { call("agent_answer", a.id, { deny: $("aFb").value || "Keep planning." }); H.hideCard(); };
@@ -455,7 +538,7 @@
       timer.left = POMO[timer.pomo.phase];
     }
     save(); paintTimer();
-    popup("timer", `<div class="ic-sq" style="background:var(--hop-orange)">⏱</div><div class="ct"><div class="t">${title}</div><div class="s">${sub}</div>
+    popup("timer", `${chip("alarm", "var(--hop-orange)")}<div class="ct"><div class="t">${title}</div><div class="s">${sub}</div>
       <div class="btns">${timer.mode === "pomo" ? '<button class="pbtn warn" id="tNext">Start next</button>' : '<button class="pbtn" id="tAgain">Again</button>'}<button class="pbtn" id="tOk">OK</button></div></div>`,
       280, 100, () => {
         $("tOk").onclick = () => H.hideCard();
@@ -476,7 +559,7 @@
   setInterval(() => {
     if (!timer.running) return;
     if (timer.mode !== "watch" && now() >= timer.endAt) timerDone();
-    if (H.pageId() === "timer" && H.isOpen()) $("tmBig").textContent = fmtTimer();
+    if (H.isOpen() && $("tmBig").closest(".pg.on")) $("tmBig").textContent = fmtTimer();
   }, 250);
   paintTimer();
   window.__hopTimer = { start: (ms) => { timer.mode = "timer"; timer.set = timer.left = ms; startTimer(); }, state: () => ({ ...timer }) };
@@ -523,18 +606,23 @@
     const icon = n.icon ? `<img src="${esc(n.icon)}" alt="">` : letter(n.app);
     popup("notif", `<div class="ic-sq" style="background:${APPC[n.app] || "#3a3a3c"};color:#fff">${icon}</div>
       <div class="ct"><div class="s">${esc(n.app)}</div><div class="t">${esc(n.title || n.app)}</div>${n.text ? `<div class="body">${esc(n.text)}</div>` : ""}</div>`,
-      340, n.text ? 96 : 72, null, { history: { app: n.app, title: n.title, text: n.text } });
+      340, n.text ? 96 : 72, null, { history: { app: n.app, title: n.title, text: n.text, icon: n.icon || "" } });
   }
   function paintAlerts() {
     const rows = $("alRows");
     if (!rows) return;
-    rows.innerHTML = state.history.length ? state.history.slice(0, 20).map((h) => `<div class="row">
-        <span class="ic-sq" style="width:20px;height:20px;border-radius:6px;font-size:10px;background:${APPC[h.app] || "#3a3a3c"};color:#fff;display:grid;place-items:center">${esc(letter(h.app))}</span>
-        <div class="grow"><div class="t1">${esc(h.title || h.app)}</div><div class="t2">${esc(h.text || h.app || "")}</div></div>
-        <span class="tm">${H.ago(h.at / 1000)}</span></div>`).join("")
+    rows.innerHTML = state.history.length ? state.history.slice(0, 20).map((h) => `<div class="row nrow">
+        <span class="n-ic" style="--c:${APPC[h.app] || "#8e8e93"}">${h.icon ? `<img src="${esc(h.icon)}" alt="">` : esc(letter(h.app))}</span>
+        <div class="grow"><div class="t1"><span class="n-app">${esc(h.app || "")}</span><span class="tm">${H.ago(h.at / 1000)}</span></div>
+          <div class="t2"><b>${esc(h.title || h.app)}</b>${h.text ? " · " + esc(h.text) : ""}</div></div></div>`).join("")
       : `<div class="empty-note">No notifications yet</div>`;
   }
-  $("alClear").addEventListener("click", () => { state.history = []; store.set("history", []); paintAlerts(); });
+  // Clear: the rows slide out one after another, then the list collapses
+  $("alClear").addEventListener("click", () => {
+    const rs = [...$("alRows").querySelectorAll(".row")];
+    rs.forEach((r, i) => { r.style.transitionDelay = `${i * 35}ms`; r.classList.add("gone"); });
+    setTimeout(() => { state.history = []; store.set("history", []); paintAlerts(); }, 260 + rs.length * 35);
+  });
 
   // ---------------------------------------------------------------- SHELF (files parked on the island)
   const ext = (n) => (n.split(".").pop() || "").slice(0, 4).toUpperCase();
@@ -544,7 +632,7 @@
     if (!box) return;
     $("shSub").textContent = state.shelf.length ? `${state.shelf.length} item${state.shelf.length === 1 ? "" : "s"}` : "Drop files on the island";
     box.innerHTML = state.shelf.length ? state.shelf.slice(0, 5).map((it, i) => `<div class="sh" data-i="${i}" title="${esc(it.path)}">
-        ${it.pinned ? '<span class="pin">📌</span>' : ""}<button class="x" data-x="${i}" title="Remove">×</button>
+        ${it.pinned ? `<span class="pin">${ICON("pin", 12)}</span>` : ""}<button class="x" data-x="${i}" title="Remove">×</button>
         <div class="ic">${it.thumb ? `<img src="${esc(it.thumb)}" alt="">` : esc(it.dir ? "DIR" : ext(it.name))}</div><div class="nm">${esc(it.name)}</div></div>`).join("")
       : `<div class="sh-drop" style="flex:1">Drop files here to keep them handy. Click one to open it; right-click to pin it or copy it.</div>`;
     box.querySelectorAll(".sh").forEach((el) => {
@@ -589,7 +677,7 @@
         const logo = m[side + "Logo"], team = m[side];
         const soccer = !m.sport || m.sport === "soccer";
         const word = soccer ? "GOAL" : "SCORE";
-        const ball = { soccer: "⚽", basketball: "🏀", football: "🏈", hockey: "🏒", baseball: "⚾" }[m.sport || "soccer"] || "⚽";
+        const ball = ICON({ soccer: "ball-football", basketball: "ball-basketball", football: "ball-american-football", baseball: "ball-baseball" }[m.sport || "soccer"] || "ball-football", 18);
         popup("sports", `<div class="goal-crest">${logo ? `<img src="${esc(logo)}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${ball}',style:'font-size:30px'}))">` : `<span style="font-size:30px">${ball}</span>`}<span class="ball">${ball}</span></div>
           <div class="ct"><div class="goal-word">${word}!</div>
           <div class="goal-line"><span class="${homeScored ? "hit" : ""}">${esc(m.home)}</span><span class="sc">${m.hs} – ${m.as}</span><span class="${homeScored ? "" : "hit"}">${esc(m.away)}</span></div>
@@ -703,6 +791,7 @@
   window.__hopBoards = (Lx) => {
     applyExtensions(Lx);
     const on = Lx.pageMode === "boards";
+    placeButtons(on);
     const key = on ? JSON.stringify(Lx.boards) + "|" + Object.keys(WG).join() : "";
     if (key === boardKey) return;
     boardKey = key;
@@ -728,7 +817,52 @@
       pg.appendChild(grid);
       full.insertBefore(pg, dots);
     });
+    buildTabs(Lx);
+    requestAnimationFrame(dividers);
   };
+  const TAB_ICON = { music: "home", agents: "robot", calendar: "calendar-event", clips: "photo", pc: "device-desktop", notes: "notes",
+                     timer: "alarm", alerts: "bell", today: "calendar-event", prayer: "building-mosque", weather: "cloud", shelf: "folder",
+                     sports: "ball-football", prompter: "note", battery: "battery-2" };
+  const SNAP_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M4 3.5h16v2H4zM12 8l5 5h-4v7.5h-2V13H7l5-5Z"/></svg>';
+  const bar = document.createElement("div");
+  bar.className = "topbar";
+  bar.innerHTML = `<div class="tabs" id="tabs"></div><div class="tb-right"><button class="tb" id="tbSnap" title="Snap to top middle">${SNAP_SVG}</button></div>`;
+  full.appendChild(bar);
+  // widget pages: the refresh and settings buttons move up here (no more
+  // hunting at the edge); classic pages keep them where they were
+  function placeButtons(on) {
+    const home = on ? bar.querySelector(".tb-right") : full;
+    for (const id of ["reload", "gear"]) { const b = $(id); if (b.parentElement !== home) home.appendChild(b); b.classList.toggle("tb", on); }
+  }
+  // snap: one screen -> top middle at once; several -> pick one, in the
+  // order they sit (Left monitor / This monitor / Right monitor)
+  window.__hopSnap = () => Promise.resolve(api.recenter()).then((r) => {
+    if (!r || !r.choose) return;
+    H.showCard(`${chip("device-desktop", "#64d2ff")}<div class="ct"><div class="t">Move the island to</div>
+      <div class="btns scr">${r.choose.map((m) => `<button class="pbtn ${m.label === "This monitor" ? "go" : ""}" data-m="${m.index}">${esc(m.label)}</button>`).join("")}</div></div>`,
+      360, 92, 8000, () => {
+        document.querySelectorAll(".card .scr [data-m]").forEach((b) => b.onclick = () => { call("snap_to", +b.dataset.m); H.hideCard(); });
+      });
+  });
+  $("tbSnap").addEventListener("click", () => window.__hopSnap());
+  function buildTabs(Lx) {
+    const tabs = $("tabs");
+    tabs.innerHTML = (Lx.boards || []).map((b, i) => `<button class="tab" data-i="${i}" title="${esc(b.name)}">${ICON(b.icon || TAB_ICON[(b.widgets[0] || {}).w] || "layout-grid", 15)}</button>`).join("");
+    tabs.onclick = (e) => { const t = e.target.closest(".tab"); if (t) H.setPage(+t.dataset.i); };
+  }
+  window.__hopTab = (i) => document.querySelectorAll("#tabs .tab").forEach((t, k) => t.classList.toggle("on", k === i));
+  // thin lines between columns / rows, like SuperIsland's dividers (not boxes)
+  function dividers() {
+    document.querySelectorAll(".pg-board .grid").forEach((g) => {
+      const top = g.getBoundingClientRect();
+      g.querySelectorAll(".tile").forEach((t) => {
+        const r = t.getBoundingClientRect();
+        t.classList.toggle("sep-l", r.left - top.left > 4);
+        t.classList.toggle("sep-t", r.top - top.top > 4);
+      });
+    });
+  }
+  window.__hopDividers = dividers;
   window.__hopWidgetNames = () => ({ ...NAME, ...Object.fromEntries(state.extensions.map((x) => ["ext-" + x.id, x.name])) });
 
   // ================================================================ CARDS
@@ -810,7 +944,7 @@
   // ---- a finished download, a new snip, the rain, a reminder, Jumu'ah
   const DL = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m-5-5 5 5 5-5M5 19h14"/></svg>';
   function download(d) {
-    popup("download", `<div class="ic-sq" style="background:var(--hop-blue)">${DL}</div><div class="ct"><div class="s">Downloaded · ${esc(d.size || "")}</div>
+    popup("download", `${chip("download", "#64d2ff")}<div class="ct"><div class="s">Downloaded · ${esc(d.size || "")}</div>
       <div class="t">${esc(d.name)}</div><div class="btns"><button class="pbtn" id="dOpen">Open</button><button class="pbtn" id="dShow">Show</button><button class="pbtn" id="dShelf">Shelf</button></div></div>`,
       330, 100, () => {
         $("dOpen").onclick = () => { call("open_file", d.path); H.hideCard(); };
@@ -828,11 +962,13 @@
       }, { history: { app: "Screenshots", title: "Screenshot", text: s.name || "" } });
   }
   function rain(r) {
-    popup("rain", `<div class="ic-sq" style="background:#0a3d7a;font-size:22px">🌧️</div><div class="ct"><div class="t">${esc(r.title)}</div><div class="s">${esc(r.text || "")}</div></div>`,
+    popup("rain", `${chip("cloud-rain", "#5ac8fa")}<div class="ct"><div class="t">${esc(r.title)}</div><div class="s">${esc(r.text || "")}</div></div>`,
       300, 72, null, { history: { app: "Weather", title: r.title, text: r.text } });
   }
-  function simpleCard(kind, icon, bg, title, text, histApp) {
-    popup(kind, `<div class="ic-sq" style="background:${bg};font-size:20px">${icon}</div><div class="ct"><div class="t">${esc(title)}</div>${text ? `<div class="s">${esc(text)}</div>` : ""}</div>`,
+  // a pop-up's icon: a Tabler line icon in its colour, on a soft tint of it
+  const chip = (icon, color) => `<div class="ic-chip" style="--c:${color}">${ICON(icon, 22)}</div>`;
+  function simpleCard(kind, icon, color, title, text, histApp) {
+    popup(kind, `${chip(icon, color)}<div class="ct"><div class="t">${esc(title)}</div>${text ? `<div class="s">${esc(text)}</div>` : ""}</div>`,
       300, 72, null, { history: { app: histApp, title, text } });
   }
 
@@ -848,7 +984,7 @@
       if (!remLast[k]) { remLast[k] = now(); return; }
       if (now() - remLast[k] >= r.every * 60000) {
         remLast[k] = now();
-        simpleCard("reminder", "🔔", "#5e5ce6", r.text, `Every ${r.every} min`, "Reminder");
+        simpleCard("reminder", "bell", "#a5a3ff", r.text, `Every ${r.every} min`, "Reminder");
       }
     });
   }, 20000);
@@ -863,7 +999,7 @@
     const mins = Math.round((at - d) / 60000);
     if (mins <= Lx.jumuahMins && mins > 0 && jumuahDone !== d.toDateString()) {
       jumuahDone = d.toDateString();
-      simpleCard("reminder", "🕌", "#3a2f10", "Jumu'ah", `Dhuhr at ${timeFmt.format(at)} · in ${mins} min`, "Prayer");
+      simpleCard("reminder", "building-mosque", "#ffd479", "Jumu'ah", `Dhuhr at ${timeFmt.format(at)} · in ${mins} min`, "Prayer");
     }
   }, 30000);
   function ramadanText() {
@@ -887,6 +1023,7 @@
     if (d && d.hijri) d = { ...d, hijri: { ...d.hijri, events: [...cds, ...(d.hijri.events || [])].sort((a, b) => (a.days ?? 999) - (b.days ?? 999)) } };
     baseToday(d);
     paintSlots();
+    paintWeatherW(); paintPrayerW(); paintDate();
   };
 
   // ================================================================ GESTURES
@@ -955,13 +1092,13 @@
       if (!on && state.held.length) {
         const held = state.held.splice(0);
         const P = (L().popups || {}).game;
-        if (P && P.on && held.length > 1) simpleCard("game", "🎮", "#30363d", `${held.length} pop-ups while you played`, "They are on the Notifications page", "Game mode");
+        if (P && P.on && held.length > 1) simpleCard("game", "device-gamepad-2", "#c7c7cc", `${held.length} pop-ups while you played`, "They are on the Notifications page", "Game mode");
         else { const [k, html, w, h, after, o] = held[held.length - 1]; popup(k, html, w, h, after, { ...o, history: null }); }
       }
     },
     focus: (on) => {
       state.focus = !!on;
-      activity("focus", 150, `<div class="side"><span style="color:var(--hop-purple)">☾</span><span>Focus</span></div><div class="side"><span class="dim">${on ? "On" : "Off"}</span></div>`, 2200);
+      activity("focus", 150, `<div class="side"><span style="color:var(--hop-purple);display:flex">${ICON("moon", 16)}</span><span>Focus</span></div><div class="side"><span class="dim">${on ? "On" : "Off"}</span></div>`, 2200);
       liveTick();
     },
     calSet: (on) => { state.calSet = !!on; },
@@ -981,13 +1118,13 @@
           $("dShelf").onclick = () => { call("drop_choice", d.path, "shelf"); H.hideCard(); };
         });
     },
-    reminder: (r) => simpleCard("reminder", r.icon || "🔔", r.bg || "#5e5ce6", r.title, r.text, r.app || "Reminder"),
-    update: (u) => {                                     // an update that can install itself
-      H.showCard(`<div class="upd-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#0a84ff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" stroke-opacity=".4"/><path d="M12 6.8v9M8.2 12.3 12 16.1l3.8-3.8"/></svg></div>
-        <div class="ct"><div class="t">${u.state === "downloading" ? `Downloading v${esc(u.latest)}…` : `Hop v${esc(u.latest)}`}</div>
-        <div class="s">${u.state === "downloading" ? `${Math.round((u.progress || 0) * 100)}%` : "Installs in the background, then restarts"}</div>
-        ${u.state === "downloading" ? `<div class="prog"><i style="width:${Math.round((u.progress || 0) * 100)}%"></i></div>` : '<div class="btns"><button class="pbtn go" id="uIns">Install now</button><button class="pbtn" id="uLater2">Later</button></div>'}</div>`,
-        320, 100, 0, () => {
+    reminder: (r) => simpleCard("reminder", r.icon || "bell", r.bg || "#a5a3ff", r.title, r.text, r.app || "Reminder"),
+    update: (u) => {                                     // an update that can install itself (the original card's look)
+      const dl = u.state === "downloading", pct = Math.round((u.progress || 0) * 100);
+      H.showCard(`${chip("download", "#0a84ff")}<div class="ct"><div class="t">${dl ? "Downloading update" : "Update available"}</div>
+        <div class="s">${dl ? `Hop v${esc(u.latest)} · ${pct}%` : `Hop v${esc(u.latest)} is ready`}</div>
+        ${dl ? `<div class="prog"><i style="width:${pct}%"></i></div>` : '<div class="btns"><button class="pbtn go" id="uIns">Install now</button><button class="pbtn" id="uLater2">Later</button></div>'}</div>`,
+        300, 100, 0, () => {
           if ($("uIns")) $("uIns").onclick = () => call("install_update");
           if ($("uLater2")) $("uLater2").onclick = () => { api.updateAnswer(false); H.hideCard(); };
         });
@@ -1010,6 +1147,17 @@
     if (on) { const id = H.pageId(); if (id) window.__hopPage(id); }
     else prompterRun(false);
   };
+  // in the settings app's preview: say how big the island is right now, so
+  // the preview can zoom to it (a small card or the closed pill fills the stage)
+  if (window.__islandPreview && window.ResizeObserver) {
+    let last = "";
+    new ResizeObserver(() => {
+      const r = island.getBoundingClientRect(), k = `${Math.round(r.width)}x${Math.round(r.height)}`;
+      if (k === last) return;
+      last = k;
+      window.parent.postMessage({ t: "isl", w: r.width, h: r.height, top: r.top }, "*");
+    }).observe(island);
+  }
   if (H.layout()) window.__hopApply(H.layout());
   // everything the host already knows, once at start
   call("hop_hello").then((d) => {

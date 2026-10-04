@@ -194,6 +194,8 @@
     if (ids.includes("clips")) loadClips();
     pcActive(ids.includes("pc"));
     if (window.__hopPage) ids.forEach((w) => window.__hopPage(w));
+    if (window.__hopTab) window.__hopTab(n);
+    if (window.__hopDividers) requestAnimationFrame(window.__hopDividers);
     island.classList.toggle("on-last", n === PAGES.length - 1);
     island.classList.toggle("last-music", pageId(PAGES.length - 1) === "music");
   }
@@ -295,7 +297,7 @@
 
   // ---- page 2: Hijri date, Ramadan / Eid, weather, today's prayers
   let today = null;
-  const wxIcon = (c) => c === 0 ? "☀️" : c <= 2 ? "🌤️" : c === 3 ? "☁️" : c <= 48 ? "🌫️" : c <= 67 ? "🌧️" : c <= 77 ? "❄️" : c <= 82 ? "🌦️" : "⛈️";
+  const wxIcon = (c, size) => window.ICON(c === 0 ? "sun" : c <= 3 ? "cloud" : c <= 48 ? "cloud-fog" : c <= 67 ? "cloud-rain" : c <= 77 ? "snowflake" : c <= 82 ? "cloud-rain" : "cloud-storm", size || 20);
   function paintToday() {
     if (!today) return;
     const h = today.hijri, w = today.weather, pr = today.prayers && today.prayers.today;
@@ -305,7 +307,7 @@
       $("evts").innerHTML = h.events.slice(0, 2).map((e) => { const d = until(e); return `${e.name} in <b>${d} day${d === 1 ? "" : "s"}</b>`; }).join("<br>");
     }
     if (w) {
-      $("wxTemp").textContent = `${wxIcon(w.code)} ${Math.round(w.temp)}°`;
+      $("wxTemp").innerHTML = `<span class="wx-ic">${wxIcon(w.code, 22)}</span>${Math.round(w.temp)}°`;
       $("wxDetail").textContent = `H ${Math.round(w.high)}° · L ${Math.round(w.low)}°`;
     }
     if (pr) {
@@ -385,7 +387,10 @@
       for (const slot of ["C", "E"]) {
         const d = (s.disks || {})[slot], g = document.querySelector(`.g[data-k=disk${slot}]`);
         if (g) g.hidden = !d;                   // one drive only: the second gauge goes
-        if (d) gauge(`disk${slot}`, 100 - (100 * d.free) / d.total, gb(d.free).replace(" GB", "G"), `${d.letter || slot}: free`);
+        if (d) {
+          gauge(`disk${slot}`, 100 - (100 * d.free) / d.total, `${Math.round(d.free / 1073741824)}G`, `${d.letter || slot}:`);
+          g.title = `${gb(d.free)} free of ${gb(d.total)}`;
+        }
       }
     });
   }
@@ -845,7 +850,7 @@
   setInterval(prayerTick, 1000);
 
   // ---- controls
-  $("center").addEventListener("click", () => api.recenter());
+  $("center").addEventListener("click", () => (window.__hopSnap ? window.__hopSnap() : api.recenter()));
   $("prev").addEventListener("click", () => api.playback("previous"));
   $("next").addEventListener("click", () => api.playback("next"));
   $("play").addEventListener("click", () => {

@@ -159,7 +159,8 @@
         <div class="item"><input class="field" id="themeIn" placeholder="Paste a theme code"><button class="btn" id="themeApply">Apply</button></div>`),
       R.html(`<div class="item" style="display:block"><div class="label" style="margin-bottom:6px"><b>Custom CSS</b><span>For everything else: it is added to the island's page</span></div>
         <textarea class="field" id="customCss" rows="4" style="width:100%;font-family:Consolas,monospace;font-size:12px;resize:vertical" placeholder=".island { box-shadow: 0 0 0 2px hotpink; }"></textarea>
-        <div style="margin-top:6px;display:flex;gap:8px"><button class="btn" id="cssSave">Apply CSS</button></div></div>`),
+        <div style="margin-top:6px;display:flex;gap:8px"><button class="btn" id="cssSave">Apply CSS</button>
+          <button class="btn" id="cssCopy" title="Your whole look as CSS, for someone else to paste here">Copy as CSS</button></div></div>`),
     ]],
     ["s-lastfm", "Last.fm", "s-profiles", [
       R.sw("scrobble", "Scrobble what plays", "Every song you listen to past half way goes to your Last.fm"),
@@ -187,40 +188,140 @@
   }
   // the table of contents and the search follow the new sections
   const toc = $("toc");
-  // the live preview: the island's real window size, scaled to fit the stage
+  // the live preview: the island's real window, ZOOMED to whatever the island
+  // shows right now (open, a small card, the closed pill), centred in the stage
+  let isl = null;
   function fitPreview(L) {
     const f = $("pv"), stage = f && f.parentElement;
-    if (!stage) return;
+    if (!stage || !L) return;
     const glow = L.glow ? 24 : 0;
     const w = Math.max(L.openW, L.style === "notch" ? L.notchW : L.pillW) + glow, h = L.openH + 46 + glow / 2;
-    const k = Math.min(1.2, (stage.clientWidth - 16) / w, (stage.clientHeight - 20) / h);
-    Object.assign(f.style, { width: w + "px", height: h + "px", transform: `translateX(-50%) scale(${k.toFixed(3)})` });
+    const iw = isl ? isl.w : w, ih = isl ? isl.h : h, top = isl ? isl.top : 0;
+    const k = Math.min(2.2, (stage.clientWidth - 40) / iw, (stage.clientHeight - 40) / ih);
+    const y = (stage.clientHeight - ih * k) / 2 - top * k - 14;     // the frame sits 14 px down in the stage
+    Object.assign(f.style, { width: w + "px", height: h + "px", transformOrigin: "50% 0",
+      transform: `translateX(-50%) translateY(${y.toFixed(1)}px) scale(${k.toFixed(3)})` });
   }
+  window.addEventListener("message", (e) => {
+    if (e.data && e.data.t === "isl" && e.source === $("pv").contentWindow) { isl = e.data; fitPreview(S.L); }
+  });
   window.addEventListener("resize", () => S.L && fitPreview(S.L));
   function buildToc() {
     toc.innerHTML = [...panel.querySelectorAll("section")].filter((s) => !s.hidden).map((s) => `<a href="#${s.id}">${esc(s.querySelector("h2").textContent)}</a>`).join("");
   }
   buildToc();
   const SP = S.SECTION_PAGE;
-  panel.querySelectorAll("section").forEach((sec) => sec.addEventListener("pointerenter", () => {
-    const id = SP[sec.id]; const L = S.L; if (!id || !L || !SP[sec.id] || ["s-player", "s-today", "s-pc"].includes(sec.id)) return;
-    const i = L.pages.filter((p) => !L.hidden.includes(p)).indexOf(id);
-    if (i >= 0) document.querySelectorAll("#chips .chip")[i]?.click();
-  }));
-  $("search").addEventListener("input", () => {
-    const q = $("search").value.trim().toLowerCase();
-    panel.querySelectorAll("section").forEach((sec) => {
-      if (!q) { sec.classList.remove("no-match"); sec.querySelectorAll(".item").forEach((i) => i.classList.remove("no-match")); return; }
-      const inTitle = sec.querySelector("h2").textContent.toLowerCase().includes(q);
-      let any = inTitle;
-      sec.querySelectorAll(".card > .item").forEach((it) => {
-        const hit = inTitle || it.textContent.toLowerCase().includes(q);
-        it.classList.toggle("no-match", !hit);
-        any = any || hit;
+  // hovering one of these newer sections shows its page in the preview: the
+  // widget page that holds it (none: the preview stays where it is)
+  for (const [id] of SECTIONS) {
+    const sec = $(id), w = SP[id];
+    if (!sec || !w) continue;
+    sec.addEventListener("pointerenter", () => {
+      const L = S.L; if (!L) return;
+      const i = L.pageMode === "boards" ? (L.boards || []).findIndex((b) => b.widgets.some((x) => x.w === w))
+        : L.pages.filter((p) => !L.hidden.includes(p)).indexOf(w);
+      const chip = document.querySelectorAll("#chips .chip")[i];
+      if (i >= 0 && chip && !chip.classList.contains("on")) chip.click();
+    });
+  }
+  // ---- search: forgiving. Exact words, typos ("notifcations"), and what people
+  // mean ("dnd" -> quiet hours, "colour" -> background). With no real match it
+  // still shows the closest settings instead of an empty page.
+  const SYN = {
+    color: "colour background accent fill", colour: "color background accent fill", dark: "background theme colour", light: "theme background",
+    size: "width height scale size", big: "size scale width height", small: "size scale width", wide: "width", tall: "height",
+    round: "corners radius", corner: "corners radius", radius: "corners", shape: "notch pill style corners",
+    sound: "chime sound bell volume", loud: "volume sound", mute: "volume sound", volume: "volume sound",
+    quiet: "quiet hours focus", dnd: "quiet hours focus", silent: "quiet hours", sleep: "quiet hours",
+    notification: "notifications pop-up pop-ups", notif: "notifications pop-up", popup: "pop-up pop-ups", alert: "pop-up notifications",
+    music: "player song spotify", song: "player music", spotify: "player music shuffle repeat", lyrics: "lyric line",
+    clip: "clipper clips trim", record: "clipper recording record", mic: "microphone privacy", camera: "privacy camera",
+    ai: "agents claude", claude: "agents claude code", chatgpt: "agents codex", codex: "agents", agent: "agents",
+    monitor: "screen", display: "screen", screen: "screen monitor", hide: "hide in these apps idle", hotkey: "shortcut", keyboard: "shortcut",
+    font: "font text clock", text: "font", clock: "clock 24-hour seconds", time: "clock 24-hour", speed: "motion speed animations",
+    animation: "motion animations bounce", anim: "motion animations", bounce: "bounce motion", smooth: "motion animations",
+    game: "game mode", gaming: "game mode", weather: "weather rain", rain: "rain alert", prayer: "prayer alarm jumu'ah",
+    adhan: "prayer alarm sound", azan: "prayer alarm sound", salah: "prayer", islam: "prayer ramadan", update: "updates",
+    backup: "back up export import", export: "export back up", theme: "theme code css colours", css: "custom css",
+    pomodoro: "timer focus", stopwatch: "timer", battery: "battery power", power: "battery use", wifi: "wi-fi", bluetooth: "bluetooth earbuds",
+    earbuds: "bluetooth", headphones: "bluetooth", move: "position", drag: "position", position: "position across the screen",
+    top: "gap from the top", notch: "style shape notch", pill: "style shape pill", widget: "pages widgets", page: "pages widgets",
+    calendar: "calendar ical", meeting: "calendar join", sport: "sports scores teams", football: "sports scores teams", soccer: "sports scores",
+    lastfm: "last.fm scrobble", scrobble: "last.fm", extension: "extensions", plugin: "extensions", profile: "profiles", preview: "live preview",
+    open: "opens hover click", hover: "opens hover rest", click: "opens click", scroll: "mouse wheel", wheel: "mouse wheel",
+  };
+  const words = (t) => t.toLowerCase().normalize("NFKD").replace(/[^a-z0-9.'+ -]/g, " ").split(/\s+/).filter((w) => w.length > 1);
+  function lev(a, b) {                              // edit distance, small words only
+    if (Math.abs(a.length - b.length) > 3) return 9;
+    const d = Array.from({ length: a.length + 1 }, (_, i) => [i]);
+    for (let j = 1; j <= b.length; j++) d[0][j] = j;
+    for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++)
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    return d[a.length][b.length];
+  }
+  // exact > starts with > contains > a typo (5+ letters: 1 wrong, 8+: 2)
+  const wordScore = (q, w, typos = true) => w === q ? 1 : w.startsWith(q) ? 0.92 : q.length >= 4 && w.includes(q) ? 0.8
+    : typos && q.length >= 5 && lev(q, w) <= (q.length >= 8 ? 2 : 1) ? 0.72 : 0;
+  function score(query, text) {
+    const T = words(text);
+    if (!T.length) return 0;
+    const Q = words(query);
+    if (!Q.length) return 0;
+    let total = 0;
+    for (const q of Q) {
+      let best = Math.max(0, ...T.map((w) => wordScore(q, w)));
+      const syn = SYN[q] || SYN[q.replace(/s$/, "")];
+      // related words count, but only as written (no typo-matching on them: "fill" must not find "pill")
+      if (syn) best = Math.max(best, 0.85 * Math.max(0, ...words(syn).map((sq) => Math.max(0, ...T.map((w) => wordScore(sq, w, false))))));
+      total += best;
+    }
+    return total / Q.length;
+  }
+  function searchFor(q) {
+    q = q.trim();
+    const secs = [...panel.querySelectorAll("section")];
+    $("searchNote").hidden = true;
+    if (!q) {
+      secs.forEach((sec) => { sec.classList.remove("no-match"); sec.querySelectorAll(".item").forEach((i) => i.classList.remove("no-match", "near")); });
+      return;
+    }
+    const hits = [];
+    for (const sec of secs) {
+      if (sec.hidden) continue;
+      const title = sec.querySelector("h2").textContent;
+      for (const it of sec.querySelectorAll(".card > .item, .card > div > .item")) {
+        // its title, description and choices as separate words (textContent glues "notificationsDiscord")
+        const text = [...it.querySelectorAll(".label b, .label span, .seg button")].map((e) => e.textContent).join(" ") || it.textContent;
+        const sc = Math.max(score(q, text), 0.9 * score(q, title));
+        hits.push([sc, it, sec]);
+      }
+    }
+    let show = hits.filter((h) => h[0] >= 0.6);
+    const near = !show.length;
+    if (near) {                                     // nothing really matches: the closest few, marked as such
+      show = hits.filter((h) => h[0] > 0.15).sort((a, b) => b[0] - a[0]).slice(0, 6);
+      $("searchNote").hidden = false;
+      $("searchNote").textContent = show.length ? `No setting called “${q}”. Closest matches:` : `Nothing like “${q}” in the settings.`;
+    }
+    const on = new Set(show.map((h) => h[1]));
+    for (const sec of secs) {
+      let any = false;
+      sec.querySelectorAll(".item").forEach((it) => {
+        const hit = on.has(it) || (it.closest(".card") && [...on].some((o) => o.closest(".card") === it.closest(".card") && it.closest("#popTable, #prio, #boardsEd") && o.closest("#popTable, #prio, #boardsEd")));
+        it.classList.toggle("no-match", !on.has(it));
+        it.classList.toggle("near", near && on.has(it));
+        any = any || on.has(it);
       });
       sec.classList.toggle("no-match", !any);
-    });
-  });
+    }
+    const first = show.sort((a, b) => b[0] - a[0])[0];
+    if (first) first[2].scrollIntoView({ block: "start" });
+  }
+  let searchT = 0;
+  $("search").addEventListener("input", () => { clearTimeout(searchT); searchT = setTimeout(() => searchFor($("search").value), 120); });
+  $("search").addEventListener("keydown", (e) => { if (e.key === "Escape") { $("search").value = ""; searchFor(""); } });
+  { const note = document.createElement("p"); note.id = "searchNote"; note.className = "hint search-note"; note.hidden = true; panel.prepend(note); }
+  window.__settingsSearch = searchFor;
 
   // ---------------------------------------------------------------- generic controls
   const unit = (el, v) => {
@@ -291,6 +392,19 @@
   const sizesOf = (w) => WIDGET_SIZES[w] || ["b", "w", "f", "s"];
   const wname = (w) => WNAME[w] || (((extra && extra.extensions) || []).find((x) => "ext-" + x.id === w) || {}).name || w;
   const used = (b) => b.widgets.reduce((n, x) => n + CELLS[x.s][0] * CELLS[x.s][1], 0);
+  // does a page's set of widgets fit the 4 x 2 grid (packed like the island's grid)?
+  function fits(ws) {
+    const g = [[0, 0, 0, 0], [0, 0, 0, 0]];
+    return ws.every((x) => {
+      const [w, h] = CELLS[x.s];
+      for (let r = 0; r <= 2 - h; r++) for (let c = 0; c <= 4 - w; c++) {
+        let free = true;
+        for (let y = 0; y < h; y++) for (let k = 0; k < w; k++) if (g[r + y][c + k]) free = false;
+        if (free) { for (let y = 0; y < h; y++) for (let k = 0; k < w; k++) g[r + y][c + k] = 1; return true; }
+      }
+      return false;
+    });
+  }
   function renderBoards(L) {
     const box = $("boardsEd");
     if (!box) return;
@@ -302,7 +416,7 @@
     const B = L.boards || [];
     box.innerHTML = B.map((b, i) => {
       const free = 8 - used(b);
-      const addable = allWidgets().filter((w) => !b.widgets.some((x) => x.w === w) && sizesOf(w).some((z) => CELLS[z][0] * CELLS[z][1] <= free));
+      const addable = allWidgets().filter((w) => !b.widgets.some((x) => x.w === w) && sizesOf(w).some((z) => fits([...b.widgets, { w, s: z }])));
       return `<div class="board" data-b="${i}">
         <div class="item bhead"><input class="field bname" data-bn="${i}" value="${esc(b.name)}" maxlength="20" placeholder="Page name">
           <span class="hint">${free} of 8 free</span>
@@ -330,7 +444,7 @@
     else if (t.dataset.ws) setBoards((B) => {
       const b = B[i], old = b.widgets[j].s;
       b.widgets[j].s = t.dataset.ws;
-      if (used(b) > 8) { b.widgets[j].s = old; S.status("No room for that size on this page"); }
+      if (!fits(b.widgets)) { b.widgets[j].s = old; S.status("No room for that size on this page"); }
     });
     else if (t.dataset.wm) setBoards((B) => { const ws = B[i].widgets; const [x] = ws.splice(j, 1); ws.splice(j + +t.dataset.wm, 0, x); });
     else if (t.dataset.wdel != null) setBoards((B) => { B[+t.dataset.wdel].widgets.splice(j, 1); if (!B[+t.dataset.wdel].widgets.length) B.splice(+t.dataset.wdel, 1); });
@@ -340,7 +454,7 @@
     if (t.dataset.wadd != null && t.value) {
       e.stopPropagation();
       const i = +t.dataset.wadd, w = t.value;
-      setBoards((B) => { const free = 8 - used(B[i]); B[i].widgets.push({ w, s: sizesOf(w).find((z) => CELLS[z][0] * CELLS[z][1] <= free) }); });
+      setBoards((B) => { B[i].widgets.push({ w, s: sizesOf(w).find((z) => fits([...B[i].widgets, { w, s: z }])) }); });
     } else if (t.dataset.bn != null) {
       e.stopPropagation();
       setBoards((B) => { B[+t.dataset.bn].name = t.value.trim() || `Page ${+t.dataset.bn + 1}`; });
@@ -504,6 +618,18 @@
     await S.commit(L); $("themeIn").value = ""; S.status("Theme applied", true);
   });
   $("cssSave").addEventListener("click", () => S.change({ customCss: $("customCss").value }));
+  // the island page builds it (it knows the exact values in use) and answers by message
+  $("cssCopy").addEventListener("click", () => {
+    const pv = $("pv").contentWindow;
+    const got = (e) => {
+      if (!e.data || e.data.t !== "themecss") return;
+      window.removeEventListener("message", got);
+      navigator.clipboard.writeText(e.data.css).then(() => S.status("CSS copied: paste it into Custom CSS", true),
+        () => { $("customCss").value = e.data.css; S.status("Clipboard blocked: the CSS is in the box above", true); });
+    };
+    window.addEventListener("message", got);
+    pv.postMessage({ t: "themecss" }, "*");
+  });
   $("lfGo").addEventListener("click", async () => {
     $("lfState").textContent = "Connecting…";
     const r = await S.api.lastfm_login($("lfUser").value, $("lfPass").value, $("lfKey").value, $("lfSecret").value);
@@ -530,6 +656,9 @@
     .field.mini-sel { flex: 0 0 auto; max-width: 118px; padding: 5px 8px; font-size: 12.5px; }
     #popTable .item .label span { font-size: 12px; }
     .item input[type=range]:disabled { opacity: 0.35; }
+    .stage iframe { transition: transform 320ms cubic-bezier(.3, 1.1, .5, 1); }
+    .search-note { margin: 0 2px 12px; font-size: 13px; color: var(--dim); }
+    .item.near { box-shadow: inset 3px 0 0 var(--blue); }
     .board { border-top: 1px solid var(--line); }
     .board:first-child { border-top: 0; }
     .board .bhead .bname { max-width: 220px; font-weight: 600; }

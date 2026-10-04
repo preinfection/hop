@@ -48,10 +48,12 @@ def push_layout(pg, L):
 
 def test_three_pages_of_widgets(board_app):
     pg, frame, _ = board_app
-    assert frame.evaluate("window.__islandPageIds()") == ["board-0", "board-1", "board-2"]
-    assert [c.text_content() for c in pg.locator("#chips .chip").all()] == ["Now", "Work", "Stuff"]
+    assert frame.evaluate("window.__islandPageIds()") == ["board-0", "board-1", "board-2", "board-3"]
+    assert [c.text_content() for c in pg.locator("#chips .chip").all()] == ["Home", "Work", "Day", "Clips"]
+    assert frame.evaluate("document.querySelectorAll('#tabs .tab').length") == 4          # a tab per page on top
     tiles = frame.evaluate("[...document.querySelectorAll('.pg-board')].map(b => [...b.querySelectorAll('.tile')].map(t => t.dataset.w + ':' + [...t.classList].find(c => c.startsWith('sz-'))))")
-    assert tiles == [["music:sz-b", "today:sz-w", "timer:sz-w"], ["agents:sz-b", "calendar:sz-b"], ["clips:sz-w", "alerts:sz-b", "pc:sz-w"]]
+    assert tiles == [["music:sz-b", "prayer:sz-t", "weather:sz-t"], ["agents:sz-b", "calendar:sz-b"],
+                     ["today:sz-t", "timer:sz-t", "alerts:sz-b"], ["clips:sz-w", "pc:sz-w", "notes:sz-f"]]
     # the player's own controls moved with it (island.js still finds them by id)
     assert frame.evaluate("!!document.querySelector('.tile #play') && !!document.querySelector('.tile #title')")
 
@@ -64,15 +66,15 @@ def test_resize_and_add_from_the_editor(board_app):
     assert saved()["boards"][0]["widgets"][0] == {"w": "music", "s": "w"}
     pg.select_option("#boardsEd select[data-wadd='0']", "notes")             # 2 cells free now: notes fits
     frame.wait_for_function("!!document.querySelector('.pg-board[data-id=\"board-0\"] .tile[data-w=notes]')")
-    assert [w["w"] for w in saved()["boards"][0]["widgets"]] == ["music", "today", "timer", "notes"]
+    assert [w["w"] for w in saved()["boards"][0]["widgets"]] == ["music", "prayer", "weather", "notes"]
 
 
 def test_no_room_means_no_change(board_app):
     pg, _, _ = board_app
     pg.locator("#boardsEd").scroll_into_view_if_needed()
-    pg.click("#boardsEd [data-b='0'][data-j='1'][data-ws='b']")          # Today -> Big: the page is full
+    pg.click("#boardsEd [data-b='0'][data-j='1'][data-ws='b']")          # Prayer -> Big: the page is full
     pg.wait_for_timeout(300)
-    assert saved()["boards"][0]["widgets"][1]["s"] == "w"
+    assert saved()["boards"][0]["widgets"][1]["s"] == "t"
 
 
 def test_classic_and_back(board_app):
@@ -82,7 +84,7 @@ def test_classic_and_back(board_app):
     assert frame.evaluate("document.querySelector('.pg-music > .wg-music') !== null")
     assert "music" in frame.evaluate("window.__islandPageIds()")
     pg.click(".seg[data-k=pageMode] button[data-v=boards]")
-    frame.wait_for_function("document.querySelectorAll('.pg-board').length === 3")
+    frame.wait_for_function("document.querySelectorAll('.pg-board').length === 4")
     assert frame.evaluate("document.querySelector('.tile .wg-music') !== null")
 
 

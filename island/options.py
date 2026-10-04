@@ -24,16 +24,18 @@ LIVE = ("rec", "prayer", "timer", "agent", "focus")             # what may take 
 # its content is drawn for.
 SIZES = {"s": (1, 1), "w": (2, 1), "t": (1, 2), "b": (2, 2), "f": (4, 1)}
 WIDGETS = {
-    "music": ("b", "w", "f"), "today": ("w", "b", "s"), "clips": ("w", "b", "f"), "pc": ("w", "f", "b"),
-    "agents": ("b", "w", "t", "f"), "timer": ("w", "s", "b"), "calendar": ("b", "w", "t"), "alerts": ("b", "t", "w"),
-    "shelf": ("w", "b", "f"), "notes": ("b", "w", "t"), "sports": ("w", "b"), "prompter": ("b", "f", "w"),
+    "music": ("b", "w", "f"), "today": ("t", "w", "b", "s"), "prayer": ("t", "w", "b"), "weather": ("t", "s", "w"), "clips": ("w", "b", "f"), "pc": ("w", "f", "b"),
+    "agents": ("b", "w", "t", "f"), "timer": ("t", "w", "s", "b"), "calendar": ("b", "w", "t"), "alerts": ("b", "t", "w"),
+    "shelf": ("w", "b", "f"), "notes": ("b", "w", "t", "f"), "sports": ("w", "b"), "prompter": ("b", "f", "w"),
     "battery": ("w", "s", "b"),
 }
 EXT_SIZES = ("b", "w", "f", "s")
+# like SuperIsland's home: media | the day | weather, side by side
 DEFAULT_BOARDS = [
-    {"name": "Now", "widgets": [{"w": "music", "s": "b"}, {"w": "today", "s": "w"}, {"w": "timer", "s": "w"}]},
+    {"name": "Home", "widgets": [{"w": "music", "s": "b"}, {"w": "prayer", "s": "t"}, {"w": "weather", "s": "t"}]},
     {"name": "Work", "widgets": [{"w": "agents", "s": "b"}, {"w": "calendar", "s": "b"}]},
-    {"name": "Stuff", "widgets": [{"w": "clips", "s": "w"}, {"w": "alerts", "s": "b"}, {"w": "pc", "s": "w"}]},
+    {"name": "Day", "widgets": [{"w": "today", "s": "t"}, {"w": "timer", "s": "t"}, {"w": "alerts", "s": "b"}]},
+    {"name": "Clips", "widgets": [{"w": "clips", "s": "w"}, {"w": "pc", "s": "w"}, {"w": "notes", "s": "f"}]},
 ]
 PRAYERS = ("Fajr", "Dhuhr", "Asr", "Maghrib", "Isha")
 
@@ -59,7 +61,7 @@ SPEC = {
     # ---- shape (-1 = the style's own value)
     "pillW": _int(126, 96, 280), "pillH": _int(37, 26, 52),
     "notchW": _int(200, 140, 340), "notchH": _int(32, 22, 48),
-    "openW": _int(540, 320, 760), "openH": _int(220, 140, 340),
+    "openW": _int(640, 320, 800), "openH": _int(236, 140, 340),
     # the open island: widget pages (boards), or the classic one-thing pages
     "pageMode": _enum("boards", "boards", "pages"),
     "boards": ("boards", None),
@@ -206,6 +208,7 @@ def _clean_one(spec, v):
             if not isinstance(b, dict) or not isinstance(b.get("widgets"), list):
                 continue
             seen, ws, cells = set(), [], 0
+            grid = [[False] * 4 for _ in range(2)]
             for w in b["widgets"]:
                 if not isinstance(w, dict):
                     continue
@@ -214,8 +217,10 @@ def _clean_one(spec, v):
                 if not ok or kind_ in seen:
                     continue                                  # unknown, or already on this page
                 size = size if size in ok else ok[0]
-                if cells + SIZES[size][0] * SIZES[size][1] > 8:
-                    continue                                  # the page is full (4 x 2 cells)
+                # its size first, then any other it allows that still fits
+                size = next((z for z in [size] + [z for z in ok if z != size] if place(grid, *SIZES[z])), None)
+                if not size:
+                    continue                                  # no room left for it on this page (4 x 2 cells)
                 cells += SIZES[size][0] * SIZES[size][1]
                 seen.add(kind_)
                 ws.append({"w": kind_, "s": size})
@@ -255,6 +260,19 @@ LEAGUES = {
     "epl": "soccer/eng.1", "laliga": "soccer/esp.1", "ucl": "soccer/uefa.champions", "mls": "soccer/usa.1",
     "nba": "basketball/nba", "nfl": "football/nfl", "nhl": "hockey/nhl", "mlb": "baseball/mlb",
 }
+
+
+def place(grid, w, h):
+    """Put a w x h widget in the first free spot, row by row, like the CSS
+    grid does (grid-auto-flow: dense). False when it doesn't fit anywhere."""
+    for r in range(len(grid) - h + 1):
+        for c in range(4 - w + 1):
+            if all(not grid[r + y][c + x] for y in range(h) for x in range(w)):
+                for y in range(h):
+                    for x in range(w):
+                        grid[r + y][c + x] = True
+                return True
+    return False
 
 
 def clean(raw):

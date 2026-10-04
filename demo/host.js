@@ -226,6 +226,7 @@
       case "get_notes": return notes;
       case "set_notes": notes = args[0]; return true;
       case "get_prompter": return prompter;
+      case "get_city": return "Toronto";
       case "agent_answer": {
         log("agent answer:", JSON.stringify(args[1]));
         agents.sessions[0].status = "work"; agents.sessions[0].detail = args[1] === "deny" ? "Denied: trying another way" : "Running the command";

@@ -388,8 +388,8 @@ class Island:
         u32.GetWindowRect(wt.HWND(self.hwnd), ctypes.byref(r))
         return r.left, r.top, r.right - r.left, r.bottom - r.top
 
-    def set_bounds(self, x, y, w, h):
-        l, t, r, b = self.work_area()
+    def set_bounds(self, x, y, w, h, area=None):
+        l, t, r, b = area or self.work_area()
         w, h = min(w, r - l), min(h, b - t)
         x = max(l, min(x, r - w))
         y = max(t, min(y, b - h))
@@ -404,7 +404,11 @@ class Island:
         l, t, r, b = self.work_area()
         pos = self.cfg.get("windowPosition")
         if pos and isinstance(pos, dict) and "cx" in pos:
-            self.set_bounds(pos["cx"] - w / 2, pos["y"], w, h)
+            # kept on the screen it was put on (if that screen is still there),
+            # not pulled onto whichever screen the new window opened on
+            area = next((m["work"] for m in features.monitors()
+                         if m["work"][0] <= pos["cx"] < m["work"][2] and m["work"][1] <= pos["y"] + 1 < m["work"][3]), None)
+            self.set_bounds(pos["cx"] - w / 2, pos["y"], w, h, area)
         else:
             self.set_bounds(l + (r - l - w) / 2, t + self.top_gap() * s, w, h)
 
@@ -1146,8 +1150,64 @@ class Island:
         self.extra = max(0, int(px or 0))
         return True
 
-    def recenter(self):
-        """Snap back to the exact top middle of the screen and forget the drag."""
+    def screen_changed(self, sig, last, now=None):
+        """A display change: a new scale, or a screen added / removed, marks
+        the time (the island will start fresh once things settle)."""
+        n_mon = len(features.monitors())
+        hit = bool(sig and last and (sig[0] != last[0] or n_mon != getattr(self, "_n_mon", n_mon)))
+        if hit:
+            self._screen_moved_at = now if now is not None else time.time()
+        self._n_mon = n_mon
+        return hit
+
+    def restart_if_settled(self, now=None):
+        """2.5 s after the last screen change: a fresh start, as the refresh button does."""
+        at = getattr(self, "_screen_moved_at", 0)
+        if at and (now if now is not None else time.time()) - at > 2.5:
+            self._screen_moved_at = 0
+            extras.log("screen or scale changed -> fresh start")
+            threading.Thread(target=self.restart_app, daemon=True).start()
+            return True
+        return False
+
+    def snap_choices(self):
+        """The screens to offer when there is more than one: [{index, label}],
+        left to right (as Windows' display settings arrange them), the
+        island's own one called "This monitor". Only screens that are on."""
+        ms = features.monitors()
+        if len(ms) < 2 or not self.hwnd:
+            return []
+        u32.MonitorFromWindow.restype = wt.HANDLE
+        here = u32.MonitorFromWindow(wt.HWND(self.hwnd), 2)
+        cur = next((m["index"] for m in ms if m["handle"] == here), 0)
+        return features.label_monitors([m["work"] for m in ms], cur)
+
+    def snap_to(self, index):
+        """Top middle of screen `index` (from snap_choices), cleanly re-sized for its scale."""
+        ms = features.monitors()
+        m = next((x for x in ms if x["index"] == index), None)
+        if not m:
+            return False
+        l, t, r, b = m["work"]
+
+        def go():
+            _, _, w, h = self.rect()
+            self.set_bounds(l + (r - l - w) / 2, t, w, h)          # onto that screen first...
+            self.reflow()                                          # ...then its size for that screen's scale
+            self.recenter(choose=False)
+            x, y, w2, _ = self.rect()                              # remembered, so a fresh start comes back here
+            self.cfg["windowPosition"] = {"cx": x + w2 / 2, "y": y}
+            write_config(self.cfg)
+        ui_thread(self.window, go)
+        return True
+
+    def recenter(self, choose=True):
+        """Snap back to the exact top middle of the screen and forget the drag.
+        With more than one screen the page asks which one first."""
+        if choose:
+            opts = self.snap_choices()
+            if opts:
+                return {"choose": opts}
         s = self.scale()
         l, t, r, b = self.work_area()
         _, _, w, h = self.rect()
@@ -1237,6 +1297,13 @@ class Island:
                     # twice: now, and once Windows has finished moving things
                     ui_thread(self.window, self.reflow)
                     threading.Timer(1.5, lambda: ui_thread(self.window, self.reflow)).start()
+                    # THE ISLAND MOVED TO ANOTHER SCREEN OR SCALE (seen 2026-10-03:
+                    # unplugging the HDMI with the lid closed left a square,
+                    # side-clipped island until the refresh button; WebView2
+                    # keeps the old scale). Re-flowing in place isn't enough, so
+                    # once things settle the island starts fresh, as refresh does.
+                    self.screen_changed(sig, last)
+                self.restart_if_settled()
                 if sig:
                     self._display_sig = sig
             if self._top_tick % 30 == 0:
@@ -1997,6 +2064,9 @@ class IslandApi(features.FeatureApi):
 
     def recenter(self):
         return self._i.recenter()
+
+    def snap_to(self, index):
+        return self._i.snap_to(index)
 
     def get_volume(self):
         return self._i.get_volume()
