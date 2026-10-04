@@ -50,10 +50,12 @@ html.boards .topbar { position: absolute; top: 12px; left: 20px; right: 20px; he
 .tile .wg-music .rec-dot { width: 28px; height: 28px; margin: -14px 0 0 -14px; }
 .tile .wg-music .controls { grid-area: ctl; justify-content: center; gap: 14px; margin: 0; }
 .tile .wg-music .controls button { width: 34px; height: 34px; border-radius: 50%; }
-.tile .wg-music .controls .play { width: 44px; height: 44px; background: rgba(255, 255, 255, 0.08); }
-.tile .wg-music .controls .play:hover { background: rgba(255, 255, 255, 0.14); }
+/* no circle behind play (like 0.1.2): a bigger icon, it brightens on hover */
+.tile .wg-music .controls .play { width: 44px; height: 44px; background: none; }
+.tile .wg-music .controls .play:hover { background: none; color: #fff; }
+.tile .wg-music .controls .play:active { transform: scale(0.92); }
 .tile .wg-music .controls button svg { width: 20px; height: 20px; }
-.tile .wg-music .controls .play svg { width: 22px; height: 22px; }
+.tile .wg-music .controls .play svg { width: 26px; height: 26px; }
 .tile .wg-music .progress { grid-area: prog; gap: 8px; }
 .tile .wg-music .time { font: 500 10px/1 var(--isl-font); font-variant-numeric: tabular-nums; color: var(--t3); width: 34px; }
 .tile .wg-music .rail { height: 4px; }
