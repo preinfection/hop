@@ -290,3 +290,13 @@ html.booting .island { opacity: 0; }
 .n-ic { overflow: visible; }
 .n-ic > img:first-child { border-radius: inherit; }
 .n-ic.logo svg { width: 22px; height: 22px; }
+/* hover on a clickable row (agents, calendar): a rounded highlight a little
+   wider than the row, drawn behind it, and the dividers around it hidden;
+   the list gets 6 px of side room so the round edges aren't clipped */
+.tile .rows.scrolls { margin-left: -6px; margin-right: -6px; padding-left: 6px; padding-right: 6px; }
+.tile .row.click { position: relative; isolation: isolate; }
+.tile .row.click::before { content: ""; position: absolute; inset: 1px -6px; border-radius: 10px; background: transparent; z-index: -1;
+  transition: background 150ms ease; }
+.tile .row.click:hover { background: none; }
+.tile .row.click:hover::before { background: rgba(255, 255, 255, 0.06); }
+.tile .row.click:hover, .tile .row.click:hover + .row { border-top-color: transparent; }
