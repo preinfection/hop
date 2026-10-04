@@ -15,6 +15,7 @@ function App($name, $script, $extra) {
 App "HopIsland" "$root\island\host.py" @(
     "--paths", "$root\island",
     "--add-data", "$root\island\ui;ui", "--add-data", "$root\island\bridge.js;.", "--add-data", "$root\assets;assets",
+    "--add-data", "$root\island\extensions;extensions",
     "--add-data", "$root\VERSION;.",
     "--collect-all", "webview", "--collect-submodules", "winrt", "--collect-binaries", "winrt",
     "--collect-all", "clr_loader", "--hidden-import", "clr", "--hidden-import", "pycaw.pycaw", "--collect-submodules", "comtypes")

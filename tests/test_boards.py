@@ -52,8 +52,8 @@ def test_three_pages_of_widgets(board_app):
     assert [c.text_content() for c in pg.locator("#chips .chip").all()] == ["Home", "Work", "Day", "Clips"]
     assert frame.evaluate("document.querySelectorAll('#tabs .tab').length") == 4          # a tab per page on top
     tiles = frame.evaluate("[...document.querySelectorAll('.pg-board')].map(b => [...b.querySelectorAll('.tile')].map(t => t.dataset.w + ':' + [...t.classList].find(c => c.startsWith('sz-'))))")
-    assert tiles == [["music:sz-b", "prayer:sz-t", "weather:sz-t"], ["agents:sz-b", "calendar:sz-b"],
-                     ["today:sz-t", "timer:sz-t", "alerts:sz-b"], ["clips:sz-w", "pc:sz-w", "notes:sz-f"]]
+    assert tiles == [["music:sz-b", "weather:sz-t", "timer:sz-t"], ["agents:sz-b", "calendar:sz-b"],
+                     ["today:sz-t", "battery:sz-t", "alerts:sz-b"], ["clips:sz-w", "pc:sz-w", "notes:sz-f"]]
     # the player's own controls moved with it (island.js still finds them by id)
     assert frame.evaluate("!!document.querySelector('.tile #play') && !!document.querySelector('.tile #title')")
 
@@ -66,13 +66,13 @@ def test_resize_and_add_from_the_editor(board_app):
     assert saved()["boards"][0]["widgets"][0] == {"w": "music", "s": "w"}
     pg.select_option("#boardsEd select[data-wadd='0']", "notes")             # 2 cells free now: notes fits
     frame.wait_for_function("!!document.querySelector('.pg-board[data-id=\"board-0\"] .tile[data-w=notes]')")
-    assert [w["w"] for w in saved()["boards"][0]["widgets"]] == ["music", "prayer", "weather", "notes"]
+    assert [w["w"] for w in saved()["boards"][0]["widgets"]] == ["music", "weather", "timer", "notes"]
 
 
 def test_no_room_means_no_change(board_app):
     pg, _, _ = board_app
     pg.locator("#boardsEd").scroll_into_view_if_needed()
-    btn = pg.locator("#boardsEd [data-b='0'][data-j='1'][data-ws='b']")   # Prayer -> Big: the page is full
+    btn = pg.locator("#boardsEd [data-b='0'][data-j='1'][data-ws='w']")   # Weather -> Wide: the page is full
     assert btn.is_disabled() and btn.get_attribute("title") == "No room on this page"
     assert saved()["boards"][0]["widgets"][1]["s"] == "t"
 

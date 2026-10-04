@@ -188,15 +188,15 @@ def test_undo(app, steps):
 
 def test_reset_layout_needs_two_clicks(app):
     pg, _, _ = app
-    pg.click(".seg[data-key=musicRight] button[data-v=clock]")
+    pg.click(".seg[data-key=musicRight] button[data-v=bars]")
     pg.wait_for_timeout(250)
     pg.locator("#resetLayout").scroll_into_view_if_needed()
     pg.click("#resetLayout")
     pg.wait_for_timeout(250)
-    assert saved()["musicRight"] == "clock"                      # one click only arms it
+    assert saved()["musicRight"] == "bars"                       # one click only arms it
     pg.click("#resetLayout")
     pg.wait_for_timeout(400)
-    assert saved()["musicRight"] == "prayer"
+    assert saved()["musicRight"] == "clock"                      # the default (prayer is opt-in)
 
 
 # ================================================================ size and position (a real window)

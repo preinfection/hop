@@ -27,14 +27,16 @@ WIDGETS = {
     "music": ("b", "w", "f"), "today": ("t", "w", "b", "s"), "prayer": ("t", "w", "b"), "weather": ("t", "s", "w"), "clips": ("w", "b", "f"), "pc": ("w", "f", "b"),
     "agents": ("b", "w", "t", "f"), "timer": ("t", "w", "s", "b"), "calendar": ("b", "w", "t"), "alerts": ("b", "t", "w"),
     "shelf": ("w", "b", "f"), "notes": ("b", "w", "t", "f"), "sports": ("w", "b"), "prompter": ("b", "f", "w"),
-    "battery": ("w", "s", "b"),
+    "battery": ("t", "w", "s", "b"),
 }
 EXT_SIZES = ("b", "w", "f", "s")
-# like SuperIsland's home: media | the day | weather, side by side
+# like SuperIsland's home: media | the day | weather, side by side. Prayer is
+# opt-in (the installer's "prayer times" box, or Settings): PRAYER_HOME then.
+PRAYER_HOME = {"name": "Home", "widgets": [{"w": "music", "s": "b"}, {"w": "prayer", "s": "t"}, {"w": "weather", "s": "t"}]}
 DEFAULT_BOARDS = [
-    {"name": "Home", "widgets": [{"w": "music", "s": "b"}, {"w": "prayer", "s": "t"}, {"w": "weather", "s": "t"}]},
+    {"name": "Home", "widgets": [{"w": "music", "s": "b"}, {"w": "weather", "s": "t"}, {"w": "timer", "s": "t"}]},
     {"name": "Work", "widgets": [{"w": "agents", "s": "b"}, {"w": "calendar", "s": "b"}]},
-    {"name": "Day", "widgets": [{"w": "today", "s": "t"}, {"w": "timer", "s": "t"}, {"w": "alerts", "s": "b"}]},
+    {"name": "Day", "widgets": [{"w": "today", "s": "t"}, {"w": "battery", "s": "t"}, {"w": "alerts", "s": "b"}]},
     {"name": "Clips", "widgets": [{"w": "clips", "s": "w"}, {"w": "pc", "s": "w"}, {"w": "notes", "s": "f"}]},
 ]
 PRAYERS = ("Fajr", "Dhuhr", "Asr", "Maghrib", "Isha")
@@ -104,9 +106,9 @@ SPEC = {
     "shuffleRepeat": _bool(True),
     # ---- prayer
     "alarmPrayers": ("subset", list(PRAYERS), PRAYERS),
-    "jumuah": _bool(True), "jumuahMins": _int(45, 10, 120),
+    "jumuah": _bool(False), "jumuahMins": _int(45, 10, 120),
     "alarmSound": _enum("chime", "chime", "bell", "soft", "none"),
-    "ramadan": _bool(True),
+    "ramadan": _bool(False),
     # ---- Today page extras
     "rainAlert": _bool(True), "countdowns": ("countdowns", []),
     "reminders": ("reminders", []),

@@ -41,7 +41,7 @@ Name: "clipper"; Description: "Hop Clipper only"
 Name: "custom"; Description: "Custom"; Flags: iscustom
 
 [Components]
-Name: "island"; Description: "Hop Island — music, lyrics, prayer times and PC stats at the top of your screen"; Types: both island
+Name: "island"; Description: "Hop Island — music, AI agents, calendar, weather and more at the top of your screen"; Types: both island
 Name: "clipper"; Description: "Hop Clipper — press F8 to save the last moments of your screen"; Types: both clipper
 
 [Tasks]
@@ -95,6 +95,7 @@ var
   ModePage: TInputOptionWizardPage;
   IslandPage, ClipperPage: TWizardPage;
   CityEdit: TNewEdit;
+  PrayerCheck: TNewCheckBox;
   MethodCombo, AsrCombo, SizeCombo, LeftCombo, RightCombo: TNewComboBox;
   LenCombo, FpsCombo, QualityCombo: TNewComboBox;
   FolderEdit: TNewEdit;
@@ -162,11 +163,15 @@ begin
   { ---- Hop Island ---- }
   IslandPage := CreateCustomPage(ModePage.ID, 'Hop Island', 'Set up the island');
   T := 0;
-  T := AddLabel(IslandPage, T, 'Your city, for prayer times and weather (leave empty to skip):');
+  T := AddLabel(IslandPage, T, 'Your city, for the weather (leave empty to skip):');
   CityEdit := TNewEdit.Create(IslandPage);
   CityEdit.Parent := IslandPage.Surface; CityEdit.Top := T; CityEdit.Width := IslandPage.SurfaceWidth;
   T := T + ScaleY(30);
-  T := AddLabel(IslandPage, T, 'Prayer time calculation:');
+  PrayerCheck := TNewCheckBox.Create(IslandPage);
+  PrayerCheck.Parent := IslandPage.Surface; PrayerCheck.Top := T; PrayerCheck.Width := IslandPage.SurfaceWidth;
+  PrayerCheck.Caption := 'Show Islamic prayer times (alarms, Ramadan, the Hijri date)'; PrayerCheck.Checked := False;
+  T := T + ScaleY(26);
+  T := AddLabel(IslandPage, T, 'Prayer time calculation (if prayer times are on):');
   MethodCombo := AddCombo(IslandPage, T, 'ISNA (North America)|Muslim World League|Umm al-Qura (Makkah)|Egyptian Authority|Karachi|Turkey (Diyanet)|Moonsighting Committee|Dubai|Gulf Region|France (UOIF)', 0);
   T := T + ScaleY(30);
   T := AddLabel(IslandPage, T, 'Asr time:');
@@ -179,7 +184,7 @@ begin
   LeftCombo := AddCombo(IslandPage, T, 'Record button (needs Hop Clipper)|Album cover|Nothing', 0);
   T := T + ScaleY(30);
   T := AddLabel(IslandPage, T, 'Right side of the player:');
-  RightCombo := AddCombo(IslandPage, T, 'Next prayer|Music bars|Time|Nothing', 0);
+  RightCombo := AddCombo(IslandPage, T, 'Next prayer|Music bars|Time|Nothing', 2);
 
   { ---- Hop Clipper ---- }
   ClipperPage := CreateCustomPage(IslandPage.ID, 'Hop Clipper', 'Set up the clipper');
@@ -230,6 +235,19 @@ begin
   if V then Result := 'true' else Result := 'false';
 end;
 
+function PrayerLayout: String;
+begin
+  { prayer times ticked: the alarms, countdown, Ramadan, Jumu'ah, Hijri date and the Next prayer widget on Home }
+  if PrayerCheck.Checked then
+    Result := ', "prayerAlarm": true, "prayCountdown": true, "ramadan": true, "jumuah": true, "todayHijri": true, "todayPrayers": true, ' +
+      '"boards": [{"name": "Home", "widgets": [{"w": "music", "s": "b"}, {"w": "prayer", "s": "t"}, {"w": "weather", "s": "t"}]}, ' +
+      '{"name": "Work", "widgets": [{"w": "agents", "s": "b"}, {"w": "calendar", "s": "b"}]}, ' +
+      '{"name": "Day", "widgets": [{"w": "today", "s": "t"}, {"w": "timer", "s": "t"}, {"w": "alerts", "s": "b"}]}, ' +
+      '{"name": "Clips", "widgets": [{"w": "clips", "s": "w"}, {"w": "pc", "s": "w"}, {"w": "notes", "s": "f"}]}]'
+  else
+    Result := '';
+end;
+
 procedure WriteIslandSettings;
 var S, Dir: String; Scale: String; Lefts, Rights: array[0..3] of String;
 begin
@@ -241,7 +259,8 @@ begin
     '"prayerMethod": ' + IntToStr(MethodId(MethodCombo.ItemIndex)) + ', ' +
     '"asrSchool": ' + IntToStr(AsrCombo.ItemIndex) + ', ' +
     '"startAtLogin": ' + B(WizardIsTaskSelected('startisland')) + ', ' +
-    '"layout": {"scale": ' + Scale + ', "musicLeft": "' + Lefts[LeftCombo.ItemIndex] + '", "musicRight": "' + Rights[RightCombo.ItemIndex] + '"}' +
+    '"layout": {"scale": ' + Scale + ', "musicLeft": "' + Lefts[LeftCombo.ItemIndex] + '", "musicRight": "' + Rights[RightCombo.ItemIndex] + '"' +
+    PrayerLayout + '}' +
     '}';
   Dir := ExpandConstant('{userappdata}\LyricsIslandLite');
   ForceDirectories(Dir);

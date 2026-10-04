@@ -116,17 +116,17 @@ PAGE_IDS = CORE_PAGES + options.NEW_PAGES
 LAYOUT_DEFAULTS = {
     "pages": list(PAGE_IDS), "hidden": [],
     "musicLeft": "rec",        # rec | art | none
-    "musicRight": "prayer",    # prayer | bars | clock | none
+    "musicRight": "clock",     # prayer | bars | clock | none (prayer: opt-in)
     "lyricLine": True, "progress": True, "controls": True, "volume": True, "snap": True,
     "pillArt": True, "pillClock": True, "pillBars": True,
     # Today page
-    "todayHijri": True, "todayEvents": True, "todayWeather": True, "todayPrayers": True,
+    "todayHijri": False, "todayEvents": True, "todayWeather": True, "todayPrayers": False,   # Hijri / prayers: opt-in
     # PC page gauges
     "gCpu": True, "gGpu": True, "gRam": True, "gDiskC": True, "gDiskE": True, "gPing": True,
     # pop-ups on the closed pill, and cards
-    "actCharge": True, "actLow": True, "actBt": True, "prayCountdown": True, "clipCard": True,
+    "actCharge": True, "actLow": True, "actBt": True, "prayCountdown": False, "clipCard": True,
     # prayer alarm
-    "prayerAlarm": True, "prayerChime": True,
+    "prayerAlarm": False, "prayerChime": True,
     # look
     "marquee": True, "artColor": True,
     "appTheme": "system",      # the settings app: system | light | dark

@@ -485,7 +485,7 @@
           <button class="mv" data-bm="-1" data-b="${i}" ${i === 0 ? "disabled" : ""} title="Move page up">▲</button>
           <button class="mv" data-bm="1" data-b="${i}" ${i === B.length - 1 ? "disabled" : ""} title="Move page down">▼</button>
           <button class="btn warn" data-bdel="${i}" ${B.length < 2 ? "disabled" : ""} title="Delete page">Delete</button></div>
-        <div class="bmap" style="grid-template-rows: repeat(2, 34px)">${b.widgets.map((x) => `<i class="m-${x.s}" style="--c:${WCOLOR[x.w] || "#8e8e93"}">${esc(wname(x.w).split(":")[0])}</i>`).join("")}</div>
+        <div class="bmap" data-map="${i}" style="grid-template-rows: repeat(2, 34px)">${b.widgets.map((x, j) => `<i class="m-${x.s}" draggable="true" data-mb="${i}" data-mj="${j}" title="Drag onto another widget to swap them, or onto an empty spot on any page" style="--c:${WCOLOR[x.w] || "#8e8e93"}">${esc(wname(x.w).split(":")[0])}</i>`).join("")}</div>
         ${b.widgets.map((x, j) => `<div class="item wrow"><span class="wdot" style="background:${WCOLOR[x.w] || "#8e8e93"}"></span>
           <div class="label"><b>${esc(wname(x.w))}</b></div>
           <div class="seg">${sizesOf(x.w).map((z) => {
@@ -499,6 +499,65 @@
       </div>`;
     }).join("") + (B.length < 6 ? `<div class="item"><button class="btn primary" id="boardAdd">Add a page</button><span class="hint">Up to 6 pages, 8 cells each (4 across, 2 down)</span></div>` : "");
   }
+  // ---- drag a widget in the maps: onto another widget = swap them (same page
+  // or another), onto a page's empty space = move it there. Anything that
+  // wouldn't fit, or would put a widget twice on one page, is refused.
+  let dragW = null;
+  function tryBoards(B, msg) {
+    for (const b of B) if (!fits(b.widgets) || new Set(b.widgets.map((x) => x.w)).size !== b.widgets.length) { S.status(msg); return false; }
+    S.change({ boards: B.filter((b) => b.widgets.length) });
+    return true;
+  }
+  panel.addEventListener("dragstart", (e) => {
+    const t = e.target.closest && e.target.closest(".bmap [data-mb]"); if (!t) return;
+    dragW = { b: +t.dataset.mb, j: +t.dataset.mj };
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", "hop-widget");
+    requestAnimationFrame(() => t.classList.add("dragging"));
+  });
+  panel.addEventListener("dragend", () => { dragW = null; panel.querySelectorAll(".bmap .dragging, .bmap .over, .bmap.over").forEach((x) => x.classList.remove("dragging", "over")); });
+  panel.addEventListener("dragover", (e) => {
+    if (!dragW) return;
+    const map = e.target.closest && e.target.closest(".bmap"); if (!map) return;
+    e.preventDefault();
+    const blk = e.target.closest("[data-mb]");
+    panel.querySelectorAll(".bmap .over, .bmap.over").forEach((x) => x.classList.remove("over"));
+    (blk || map).classList.add("over");
+  });
+  panel.addEventListener("drop", (e) => {
+    if (!dragW) return;
+    const map = e.target.closest && e.target.closest(".bmap"); if (!map) return;
+    e.preventDefault();
+    const blk = e.target.closest("[data-mb]");
+    const B = structuredClone(S.L.boards), from = dragW;
+    const src = B[from.b].widgets[from.j];
+    if (blk) {
+      const to = { b: +blk.dataset.mb, j: +blk.dataset.mj };
+      if (to.b === from.b && to.j === from.j) return;
+      const dst = B[to.b].widgets[to.j];
+      if (to.b === from.b) {                          // same page: swap their places
+        B[from.b].widgets[from.j] = dst; B[to.b].widgets[to.j] = src;
+      } else {                                        // two pages: each takes the other's spot, keeping its own size if it fits
+        const fitSize = (w, list, k) => [w.s, ...sizesOf(w.w).filter((z) => z !== w.s)].find((z) => fits(list.map((y, n) => (n === k ? { ...w, s: z } : y))));
+        const a = { ...dst }, c = { ...src };
+        B[from.b].widgets[from.j] = a; B[to.b].widgets[to.j] = c;
+        const sa = fitSize(a, B[from.b].widgets, from.j), sc = fitSize(c, B[to.b].widgets, to.j);
+        if (!sa || !sc) { S.status("Those two can't swap: one wouldn't fit on the other page"); return; }
+        a.s = sa; c.s = sc;
+      }
+      if (tryBoards(B, "That swap doesn't fit")) S.status(`Swapped ${wname(src.w)} and ${wname(dst.w)}`, true);
+    } else {
+      const to = +map.dataset.map;
+      if (to === from.b) return;
+      if (B[to].widgets.some((x) => x.w === src.w)) { S.status(`${wname(src.w)} is already on that page`); return; }
+      B[from.b].widgets.splice(from.j, 1);
+      const size = [src.s, ...sizesOf(src.w).filter((z) => z !== src.s)].find((z) => fits([...B[to].widgets, { w: src.w, s: z }]));
+      if (!size) { S.status("No room on that page"); return; }
+      B[to].widgets.push({ w: src.w, s: size });
+      if (tryBoards(B, "No room on that page")) S.status(`Moved ${wname(src.w)} to ${B[to].name}`, true);
+    }
+  });
+
   const setBoards = (fn) => { const B = structuredClone(S.L.boards); fn(B); S.change({ boards: B }); };
   panel.addEventListener("click", (e) => {
     const t = e.target.closest("button"); if (!t || !t.closest("#boardsEd")) return;
@@ -747,6 +806,11 @@
       background: color-mix(in srgb, var(--c) 34%, #1c1c1e); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 55%, transparent);
       overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding: 0 6px; }
     .bmap .m-s { grid-column: span 1; } .bmap .m-w { grid-column: span 2; } .bmap .m-t { grid-row: span 2; }
-    .bmap .m-b { grid-column: span 2; grid-row: span 2; } .bmap .m-f { grid-column: span 4; }`;
+    .bmap .m-b { grid-column: span 2; grid-row: span 2; } .bmap .m-f { grid-column: span 4; }
+    .bmap i[draggable] { cursor: grab; transition: transform 140ms ease, opacity 140ms ease, box-shadow 140ms ease; }
+    .bmap i[draggable]:active { cursor: grabbing; }
+    .bmap i.dragging { opacity: 0.35; }
+    .bmap i.over { transform: scale(1.04); box-shadow: inset 0 0 0 2px #fff, 0 0 0 2px var(--blue); }
+    .bmap.over { box-shadow: 0 0 0 2px var(--blue); }`;
   document.head.appendChild(style);
 })();

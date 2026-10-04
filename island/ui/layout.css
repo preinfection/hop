@@ -269,3 +269,8 @@ html.motion-reduced .goal-word span { animation: none; opacity: 1; transform: no
 /* both the camera and the microphone in use: two dots (green, orange) side by side */
 .pdot2 { right: 16px; }
 .island.pdot-two .sl-r { transform: translateX(-18px); }
+
+/* starting up: hidden, and nothing animates, until the real shape is applied */
+html.booting .island, html.booting .island * { transition: none !important; }
+html.booting .island { opacity: 0; }
+.island { transition-property: width, height, border-radius, transform, opacity; }

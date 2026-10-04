@@ -156,7 +156,7 @@ def test_customized_install_writes_settings(target):
         install(target, "island,clipper", "/CUSTOMIZE=1")
         got = json.load(open(island_file, encoding="utf-8"))
         assert got["prayerMethod"] == 2 and got["asrSchool"] == 0 and got["city"] == ""
-        assert got["layout"] == {"scale": 1.0, "musicLeft": "rec", "musicRight": "prayer"}
+        assert got["layout"] == {"scale": 1.0, "musicLeft": "rec", "musicRight": "clock"}    # prayer times are opt-in (off)
         clip = json.load(open(clip_file, encoding="utf-8"))
         assert clip["fps"] == 60 and clip["quality"] == "high" and clip["defaultSeconds"] == 30
         assert clip["watermark"] is True and clip["islandInClips"] is True

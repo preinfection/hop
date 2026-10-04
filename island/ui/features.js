@@ -1261,6 +1261,8 @@
     }).observe(island);
   }
   if (H.layout()) window.__hopApply(H.layout());
+  // the real shape is on: show the island (it fades in already the right size)
+  requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove("booting")));
   // everything the host already knows, once at start
   call("hop_hello").then((d) => {
     if (!d) return;
