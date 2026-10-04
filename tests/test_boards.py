@@ -88,6 +88,64 @@ def test_classic_and_back(board_app):
     assert frame.evaluate("document.querySelector('.tile .wg-music') !== null")
 
 
+def test_design_choice_is_first_and_brings_its_size(board_app):
+    pg, frame, _ = board_app
+    assert pg.evaluate("document.querySelector('#islandPanel section').id") == "s-general"
+    assert pg.evaluate("[...document.querySelectorAll('#s-general [data-k]')].map(e => e.dataset.k)") == ["pageMode", "wheel"]
+    pg.click("#s-general .seg[data-k=pageMode] button[data-v=pages]")
+    pg.wait_for_function("document.getElementById('s-boards').hidden")
+    L = saved()
+    assert (L["pageMode"], L["openW"], L["openH"]) == ("pages", 360, 150)        # 0.1.2's island
+    pg.click("#s-general .seg[data-k=pageMode] button[data-v=boards]")
+    pg.wait_for_function("!document.getElementById('s-boards').hidden")
+    L = saved()
+    assert (L["pageMode"], L["openW"], L["openH"]) == ("boards", 640, 236)
+
+
+def open_preview(pg, frame):
+    pg.evaluate("document.getElementById('pv').contentWindow.postMessage({t:'cmd', fn:'Hover', args:[true]}, '*')")
+    frame.wait_for_function("document.querySelector('.island').classList.contains('open')")
+    frame.wait_for_timeout(600)
+
+
+def test_wheel_turns_widget_pages_by_default(board_app):
+    pg, frame, _ = board_app
+    assert saved()["wheel"] == "pages"
+    open_preview(pg, frame)
+    tab = "[...document.querySelectorAll('#tabs .tab')].findIndex(t => t.classList.contains('on'))"
+    assert frame.evaluate(tab) == 0
+    frame.evaluate("document.querySelector('.tile[data-w=weather]').dispatchEvent(new WheelEvent('wheel', {deltaY: 120, bubbles: true, cancelable: true}))")
+    frame.wait_for_function(tab + " === 1")
+    pg.click("#s-general .seg[data-k=wheel] button[data-v=none]")
+    frame.wait_for_timeout(500)
+    frame.evaluate("document.querySelector('.island').dispatchEvent(new WheelEvent('wheel', {deltaY: 120, bubbles: true, cancelable: true}))")
+    frame.wait_for_timeout(500)
+    assert frame.evaluate(tab) == 1                                                # switched off: it stays
+
+
+def test_volume_grows_the_whole_island_like_0_1_2(board_app):
+    """The user wanted 0.1.2's volume back: the island grows down and the row
+    runs the full width under every widget, not inside the player."""
+    pg, frame, _ = board_app
+    open_preview(pg, frame)
+    h0 = frame.evaluate("document.querySelector('.island').getBoundingClientRect().height")
+    frame.evaluate("document.querySelector('.tile #volBtn').dispatchEvent(new MouseEvent('mouseenter'))")
+    frame.wait_for_timeout(700)
+    r = frame.evaluate("""(() => { const b = s => document.querySelector(s).getBoundingClientRect();
+      return {isl: b('.island'), row: b('#volRow'), tiles: Math.max(...[...document.querySelectorAll('.pg-board.on .tile')].map(t => t.getBoundingClientRect().bottom)),
+              parent: document.getElementById('volRow').parentElement.className}; })()""")
+    assert "island" in r["parent"]                                                 # not inside the player tile
+    assert r["isl"]["height"] >= h0 + 20                                           # the island grew down
+    assert r["row"]["top"] >= r["tiles"] and r["row"]["bottom"] <= r["isl"]["bottom"]
+    assert r["row"]["width"] >= r["isl"]["width"] - 60                             # the whole width
+    assert abs((r["row"]["left"] - r["isl"]["left"]) - (r["isl"]["right"] - r["row"]["right"])) <= 1
+
+
+def test_play_has_no_circle(board_app):
+    _, frame, _ = board_app
+    assert frame.evaluate("getComputedStyle(document.querySelector('.tile #play')).backgroundColor") in ("rgba(0, 0, 0, 0)", "transparent")
+
+
 CASES = [(w, s) for w, sizes in options.WIDGETS.items() for s in sizes]
 
 FILL = r"""(() => {

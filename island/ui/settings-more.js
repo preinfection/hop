@@ -42,9 +42,13 @@
 
   // where each new section goes: [id, title, after-section-id, rows]
   const SECTIONS = [
+    // for the whole island, not one page: first in the list
+    ["s-general", "General", "TOP", [
+      R.seg("pageMode", "Island design", "New: widgets side by side on a few pages. Classic: the 0.1.2 island, one thing per page.",
+            [["boards", "New"], ["pages", "Classic"]]),
+      R.seg("wheel", "Scroll on the open island", "Lists scroll first; at their end the page changes", [["pages", "Changes page"], ["volume", "Changes volume"], ["none", "Nothing"]]),
+    ]],
     ["s-boards", "Pages & widgets", "s-style", [
-      R.seg("pageMode", "When it opens", "Widgets: a few things per page, side by side. Classic: one thing per page.",
-            [["boards", "Widget pages"], ["pages", "Classic pages"]]),
       R.html(`<div id="boardsEd"></div>`),
     ]],
     ["s-shape", "Shape & size", "s-boards", [
@@ -84,7 +88,6 @@
       R.seg("swipeUp", "Swipe a card up", "", [["dismiss", "Dismisses it"], ["nothing", "Does nothing"]]),
       R.select("dblClick", "Double-click", "", ACTIONS),
       R.select("middleClick", "Middle-click", "", [["none", "Nothing"], ["playpause", "Play / pause"], ["mute", "Mute the music"], ["next", "Next song"]]),
-      R.seg("wheel", "Mouse wheel on the open island", "", [["pages", "Pages"], ["volume", "Volume"], ["none", "Nothing"]]),
       R.sw("hotkey", "Shortcut to peek", "Opens the island from anywhere; press again to close"),
       R.select("hotkeyKey", "Shortcut", "", [["ctrl+alt+space", "Ctrl + Alt + Space"], ["ctrl+shift+space", "Ctrl + Shift + Space"], ["alt+`", "Alt + `"], ["win+alt+h", "Win + Alt + H"]]),
     ]],
@@ -186,7 +189,8 @@
     if (cur.length) cards.push(cur);
     sec.innerHTML = `<h2>${esc(title)}</h2>` + cards.map((c, i) => `<div class="card"${i ? ' style="margin-top:10px"' : ""}>${c.join("")}</div>`).join("");
     const ref = $(after);
-    ref ? ref.after(sec) : panel.appendChild(sec);
+    if (after === "TOP") panel.prepend(sec);
+    else ref ? ref.after(sec) : panel.appendChild(sec);
   }
   // SHORTER: the newer rows join the sections they belong to (no "Player: more")
   for (const [from, into, first] of [["s-playermore", "s-player"], ["s-todaymore", "s-today"], ["s-prayermore", "s-prayer"],
@@ -404,7 +408,10 @@
     const b = e.target.closest(".seg[data-k] button");
     if (!b) return;
     const k = b.parentElement.dataset.k;
-    if (S.L[k] !== b.dataset.v) S.change({ [k]: b.dataset.v });
+    if (S.L[k] === b.dataset.v) return;
+    // the design brings its own open size: Classic is 0.1.2's island
+    if (k === "pageMode") S.change({ pageMode: b.dataset.v, ...(b.dataset.v === "pages" ? { openW: 360, openH: 150 } : { openW: 640, openH: 236 }) });
+    else S.change({ [k]: b.dataset.v });
   });
 
   function renderControls(L) {
@@ -471,6 +478,8 @@
     const box = $("boardsEd");
     if (!box) return;
     box.hidden = L.pageMode !== "boards";
+    const sec = $("s-boards");
+    if (sec) sec.hidden = box.hidden;               // Classic has no widget pages to arrange
     const classic = $("s-pages");
     if (classic) classic.hidden = L.pageMode === "boards";
     if (box.hidden) return;

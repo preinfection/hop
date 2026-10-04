@@ -256,15 +256,13 @@
     if (!isOpen || e.target.closest(".vol-btn, .vol-row, .tm-big")) return;   // the speaker scrolls the volume, the timer its time
     // a list (agents, calendar, notes...) scrolls itself while it can; at its
     // end, or if it's too short to scroll, the wheel moves to the next page
-    const sc = e.target.closest(".scrolls, .rows, .plan");
+    const sc = e.target.closest(".scrolls, .rows, .plan, textarea");
     if (sc && sc.scrollHeight > sc.clientHeight + 1) {
       const can = e.deltaY > 0 ? sc.scrollTop + sc.clientHeight < sc.scrollHeight - 1 : sc.scrollTop > 0;
       if (can) return;
     }
     e.preventDefault();
-    let how = (layout && layout.wheel) || "pages";
-    // widget pages are switched with the tabs on top, never by scrolling
-    if (how === "pages" && document.documentElement.classList.contains("boards")) how = "none";
+    const how = (layout && layout.wheel) || "pages";
     if (how === "none") return;
     if (how === "volume") {
       vol.level = Math.min(1, Math.max(0, Math.round((vol.level + (e.deltaY < 0 ? 0.05 : -0.05)) * 100) / 100));
