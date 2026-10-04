@@ -128,6 +128,9 @@
   const pdot = document.createElement("i");
   pdot.className = "pdot";
   mini.appendChild(pdot);
+  const pdot2 = document.createElement("i");          // the second dot: the mic, when the camera is on too
+  pdot2.className = "pdot pdot2";
+  mini.appendChild(pdot2);
   let slotKey = "";
   function applySlots(L) {
     const want = { l: L.slotLeft, c: L.slotCenter, r: L.slotRight };
@@ -193,8 +196,10 @@
     const mid = (el) => (el && el.textContent.trim() ? el.scrollWidth : 0);
     const c = Math.max(slotBox.c.offsetWidth, island.classList.contains("live-on") ? mid(live) : 0,
                        island.classList.contains("recording") ? mid($("recTime")) : 0);
-    const dot = pdot.classList.contains("mic") || pdot.classList.contains("cam") ? 10 : 0;    // room for the privacy dot
+    const two = pdot2.classList.contains("mic");
+    const dot = pdot.classList.contains("mic") || pdot.classList.contains("cam") ? (two ? 19 : 10) : 0;    // room for the privacy dot(s)
     island.classList.toggle("pdot-on", !!dot);
+    island.classList.toggle("pdot-two", two);
     // .mini's 10 px padding + a 12 px gap between a side slot and the middle, the same on both sides
     const side = 10 + 12 + Math.max(l, r + dot);
     const fit = (cw) => Math.ceil(cw ? cw + 2 * side : 10 + l + 16 + r + dot + 10);
@@ -251,12 +256,23 @@
   // ---- privacy dot
   function paintPrivacy() {
     const on = L().micCamDot !== false;
+    // camera green, microphone orange; both in use: both dots, side by side
     const want = on && state.cam.length ? " cam" : on && state.mic.length ? " mic" : "";
+    const want2 = on && state.cam.length && state.mic.length ? " mic" : "";
     pdot.title = [...state.cam.map((a) => a + " · camera"), ...state.mic.map((a) => a + " · microphone")].join("\n");
+    pdot2.title = pdot.title;
     clearTimeout(paintPrivacy.t);
-    if (want) { pdot.className = "pdot" + want; fitPill(); return; }   // the pill widens around the dot, still centred
-    pdot.classList.add("out");                       // going: fade the dot, then close the gap
-    paintPrivacy.t = setTimeout(() => { pdot.className = "pdot"; fitPill(); }, 260);
+    const fade = (el) => { if (/\b(mic|cam)\b/.test(el.className)) el.classList.add("out"); };
+    if (!want2) fade(pdot2);
+    if (want) {
+      pdot.className = "pdot" + want;
+      if (want2) { pdot2.className = "pdot pdot2" + want2; fitPill(); return; }
+      paintPrivacy.t = setTimeout(() => { pdot2.className = "pdot pdot2"; fitPill(); }, 260);
+      fitPill();
+      return;
+    }
+    fade(pdot);                                      // going: fade the dots, then close the gap
+    paintPrivacy.t = setTimeout(() => { pdot.className = "pdot"; pdot2.className = "pdot pdot2"; fitPill(); }, 260);
   }
 
   // ---- idle: tuck the pill away after a while with nothing happening
@@ -1163,7 +1179,8 @@
       state.mic = d.mic || []; state.cam = d.cam || [];
       paintPrivacy(); liveTick();
       if (news.length && L().micCamDot !== false) {
-        const [app, what] = news[0];
+        let [app, what] = news[0];
+        if (news.some(([a, w]) => a === app && w !== what)) what = "camera and microphone";   // one app, both at once
         const c = what === "camera" ? "var(--hop-green)" : "var(--hop-orange)";
         activity("privacy", Math.min(330, 190 + app.length * 7), `<div class="side"><i class="pd" style="background:${c}"></i><span class="name">${esc(app)}</span></div>
           <div class="side"><span class="dim">is using your ${what}</span></div>`, (L().popups.privacy || {}).ms || 3000);

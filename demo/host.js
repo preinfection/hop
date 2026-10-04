@@ -315,8 +315,9 @@
     wifi: () => ev("wifi", { ssid: "BELL892" }),
     focus: () => { H.focus = !H.focus; ev("focus", H.focus); },
     game: () => { H.gaming = !H.gaming; ev("game", H.gaming); log("game mode", H.gaming ? "on (pop-ups held)" : "off"); },
-    mic: () => { H.mic = !H.mic; ev("privacy", { mic: H.mic ? ["Discord"] : [], cam: [] }); },
-    cam: () => { H.cam = !H.cam; ev("privacy", { mic: [], cam: H.cam ? ["Camera"] : [] }); },
+    // the two are independent, like on a PC: both can be on at once
+    mic: () => { H.mic = !H.mic; ev("privacy", { mic: H.mic ? ["Discord"] : [], cam: H.cam ? ["Discord"] : [] }); },
+    cam: () => { H.cam = !H.cam; ev("privacy", { mic: H.mic ? ["Discord"] : [], cam: H.cam ? ["Discord"] : [] }); },
     clip: () => js("__islandClip", { name: "Roblox 2026-10-03 17-02-11 (30s).mp4", path: "C:\\demo\\clip.mp4", url: "/demo/media/sample.mp4", seconds: 30, kind: "clip", game: "Roblox" }),
     goal: () => { const m = (s) => ({ id: "m1", league: "Premier League", home: "Arsenal", away: "Chelsea", hs: s, as: 1, status: "67'", live: true, state: "in",
                                       homeLogo: "https://a.espncdn.com/i/teamlogos/soccer/500/359.png", awayLogo: "https://a.espncdn.com/i/teamlogos/soccer/500/363.png" });

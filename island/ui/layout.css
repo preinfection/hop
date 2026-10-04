@@ -265,3 +265,7 @@ html.boards .topbar { left: 24px; right: 24px; }
 @keyframes gl-in { to { opacity: 1; transform: none; } }
 @keyframes gl-wave { 0%, 100% { color: #fff; transform: none; } 45% { color: #7ef0a0; transform: translateY(-3px); text-shadow: 0 0 10px rgba(48, 209, 88, 0.6); } }
 html.motion-reduced .goal-word span { animation: none; opacity: 1; transform: none; }
+
+/* both the camera and the microphone in use: two dots (green, orange) side by side */
+.pdot2 { right: 16px; }
+.island.pdot-two .sl-r { transform: translateX(-18px); }
