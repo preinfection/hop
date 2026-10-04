@@ -998,6 +998,9 @@
   window.__hop = {
     api, $, esc, island, showCard, hideCard, armCard, fitCard, growPill, settlePill, setPage,
     off: (k) => off(k), layout: () => layout, isOpen: () => isOpen, pageId: () => pageId(page),
+    // is this widget on the page in view? (a widget page holds several)
+    widgets: () => !PAGES[page] ? [] : PAGES[page].dataset.widgets ? PAGES[page].dataset.widgets.split(",") : [pageId(page)],
+    showing: (id) => !!PAGES[page] && (PAGES[page].dataset.id === id || (PAGES[page].dataset.widgets || "").split(",").includes(id)),
     clipLen, ago, vol, paintVol, sendVol, nowMs, playback: () => pb, today: () => today, prayers: () => prayers,
     applyLayout: () => applyLayout(layout), cardSeq: () => cardSeq, cardOn: () => cardOn,
   };

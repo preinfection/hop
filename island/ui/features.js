@@ -303,7 +303,7 @@
     state.history.unshift({ ...item, at: now() });
     state.history = state.history.slice(0, 40);
     store.set("history", state.history);
-    if (H.pageId() === "alerts") paintAlerts();
+    if (H.showing("alerts")) paintAlerts();
   }
   // Every pop-up goes through here: its kind's settings decide whether it
   // shows, for how long, and with which sound.
@@ -782,7 +782,7 @@
       lastScores[k] = sc;
     }
     state.sports = ms;
-    if (H.pageId() === "sports") paintSports();
+    if (H.showing("sports")) paintSports();
   }
 
   // ---------------------------------------------------------------- TELEPROMPTER
@@ -1176,7 +1176,7 @@
     agents: (d) => {
       const asking = (d.sessions || []).some((x) => x.status === "ask");
       if (asking && !state.agents.some((x) => x.status === "ask")) state.askSince = now();
-      state.agents = d.sessions || []; state.usage = d.usage || null; if (H.pageId() === "agents") paintAgents(); liveTick(); },
+      state.agents = d.sessions || []; state.usage = d.usage || null; if (H.showing("agents")) paintAgents(); liveTick(); },
     agentAsk: agentCard,
     agentEdit,
     privacy: (d) => {
@@ -1209,13 +1209,13 @@
       liveTick();
     },
     calSet: (on) => { state.calSet = !!on; },
-    calendar: (evs) => { state.calendar = (evs || []).sort((a, b) => a.start - b.start); if (H.pageId() === "calendar") paintCalendar(); },
+    calendar: (evs) => { state.calendar = (evs || []).sort((a, b) => a.start - b.start); if (H.showing("calendar")) paintCalendar(); },
     wifi: (w) => activity("wifi", w.ssid ? Math.min(280, 150 + w.ssid.length * 7) : 160,
       `<div class="side"><svg viewBox="0 0 24 24" fill="none" stroke="${w.ssid ? "#fff" : "#ff453a"}" stroke-width="2" stroke-linecap="round"><path d="M2 8.8a15 15 0 0 1 20 0M5.5 12.5a10 10 0 0 1 13 0M9 16a5 5 0 0 1 6 0"/><circle cx="12" cy="19" r="1" fill="#fff"/></svg><span class="name">${esc(w.ssid || "Wi-Fi off")}</span></div><div class="side"><span class="dim">${w.ssid ? "Connected" : "Disconnected"}</span></div>`),
     net: (n) => { state.net = n; paintSlots(); },
-    battery: (b) => { state.battery = b; paintSlots(); if (H.pageId() === "battery") paintBattery(); },
+    battery: (b) => { state.battery = b; paintSlots(); if (H.showing("battery")) paintBattery(); },
     clipStats: (c) => { state.clipStats = c; paintSlots(); },
-    shelf: (items) => { state.shelf = items || []; if (H.pageId() === "shelf") paintShelf(); },
+    shelf: (items) => { state.shelf = items || []; if (H.showing("shelf")) paintShelf(); },
     extensions: (xs) => { state.extensions = xs || []; applyExtensions(L()); H.applyLayout(); },
     drop: (d) => {                                      // a file dropped while "ask" is set: upload it, or keep it
       H.showCard(`<div class="drop"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m-5 5 5-5 5 5M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"/></svg></div>
@@ -1253,7 +1253,7 @@
   };
   window.__hopHover = (on) => {
     idleReset();
-    if (on) { const id = H.pageId(); if (id) window.__hopPage(id); }
+    if (on) H.widgets().forEach((id) => window.__hopPage(id));        // fresh on every open, every widget on the page
     else prompterRun(false);
   };
   // in the settings app's preview: say how big the island is right now, so
