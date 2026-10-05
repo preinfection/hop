@@ -12,6 +12,9 @@ Spotify Web API, so changes arrive as events and controls need no sign-in.
 
 Run:  pythonw host.py      (start.bat)
 """
+import sys
+if sys.platform.startswith("linux"):
+    import hop_linux  # noqa: F401  (first: stands in for the Windows calls, see hop_linux.py)
 import asyncio
 import hashlib
 import ctypes
@@ -2314,4 +2317,8 @@ features.host = sys.modules[__name__]
 
 
 if __name__ == "__main__":
-    main()
+    if sys.platform.startswith("linux"):
+        import linux_host
+        linux_host.main()
+    else:
+        main()

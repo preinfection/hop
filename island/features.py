@@ -50,6 +50,7 @@ HOOK_EVENTS = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", 
                "SessionEnd"]
 CLAUDE_SETTINGS = os.path.join(os.path.expanduser("~"), ".claude", "settings.json")
 EXT_DIR = os.path.join(os.environ.get("APPDATA", ""), "Hop", "extensions")
+EXT_BASE = "https://ext.island/"             # where the page finds an extension's files (Linux: see linux_host)
 LOOK_KEYS = ["style", "pillW", "pillH", "notchW", "notchH", "openW", "openH", "radiusClosed", "radiusOpen", "topGap", "bg",
              "bgOpacity", "bgStyle", "border", "borderColor", "borderOpacity", "glow", "accentMode", "accentColor", "font",
              "clock24", "clockSeconds", "anim", "bounce", "speed", "slotLeft", "slotCenter", "slotRight", "customCss"]
@@ -1171,7 +1172,7 @@ class Features:
             if not re.fullmatch(r"[\w./-]{1,80}", page) or ".." in page:
                 continue
             out.append({"id": name, "name": str(m.get("name") or name)[:40], "description": str(m.get("description") or "")[:120],
-                        "url": f"https://ext.island/{name}/{page}"})
+                        "url": f"{EXT_BASE}{name}/{page}"})
         return out
 
     # profiles, themes, backup
