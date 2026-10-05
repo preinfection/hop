@@ -188,6 +188,8 @@
       case "get_prayers": return prayerData;
       case "get_today": return today();
       case "get_clips": return clips();
+      case "all_clips": return clips();
+      case "save_clip": case "delete_clip": return true;
       case "get_sys": return { cpu: 18 + Math.random() * 20, gpu: 30 + Math.random() * 25, ram: { used: 9.1e9, total: 15.7e9 },
                                disks: { C: { letter: "C", free: 95e9, total: 475e9 }, E: { letter: "E", free: 37e9, total: 931e9 } } };
       case "ping": return 18 + Math.round(Math.random() * 12);
@@ -262,9 +264,9 @@
         micTrack: false, nameByGame: true, folderPerGame: true }) };
       case "set_clipper": Object.assign(H.clip, args[0]); return H.call(win, "get_clipper", []);
       case "start_clipper": case "pick_folder": return null;
-      case "get_location": return { location: { name: "Toronto", label: "Toronto, Ontario, Canada" }, method: 2, school: 0 };
+      case "get_location": return { location: { name: "Toronto", label: "Toronto, Ontario, Canada", lat: 43.65, lon: -79.38 }, method: 2, school: 0 };
       case "set_location": return H.call(win, "get_location", []);
-      case "search_city": return [{ label: "Toronto, Ontario, Canada" }];
+      case "search_city": return [{ name: "Toronto", label: "Toronto, Ontario, Canada", lat: 43.65, lon: -79.38 }];
       case "get_update": case "check_update": return { current: "0.1.3", latest: "0.1.3", available: false, checked: true, auto: true };
       case "set_auto_update": return H.call(win, "get_update", []);
       case "open_release": return true;

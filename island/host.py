@@ -661,6 +661,37 @@ class Island:
         os.startfile(clips_dir())
         return True
 
+    # ---- Highlights: the last two weeks of clips, by game
+    def all_clips(self, days=14, limit=48):
+        cut = time.time() - days * 86400
+        clips = [c for c in extras.recent_clips(400) if c["at"] >= cut and c["kind"] == "clip"][:limit]
+        for c in clips:
+            c["url"] = clip_url(c["path"])
+            c["thumb"] = extras.thumb_data(c["path"]) or ""
+        return clips
+
+    def delete_clip(self, path):
+        """To the Recycle Bin (undoable), and only files in the clips folder."""
+        root = os.path.normcase(os.path.abspath(clips_dir()))
+        p = os.path.normcase(os.path.abspath(str(path or "")))
+        if not p.startswith(root + os.sep) or not p.endswith(".mp4") or not os.path.isfile(p):
+            return False
+
+        class SHFILEOPSTRUCTW(ctypes.Structure):
+            _fields_ = [("hwnd", wt.HWND), ("wFunc", wt.UINT), ("pFrom", wt.LPCWSTR), ("pTo", wt.LPCWSTR),
+                        ("fFlags", ctypes.c_ushort), ("fAnyOperationsAborted", wt.BOOL),
+                        ("hNameMappings", ctypes.c_void_p), ("lpszProgressTitle", wt.LPCWSTR)]
+        op = SHFILEOPSTRUCTW(None, 3, os.path.abspath(path) + "\0", None, 0x0040 | 0x0010 | 0x0004 | 0x0400)  # DELETE: ALLOWUNDO, NOCONFIRMATION, SILENT, NOERRORUI
+        return ctypes.windll.shell32.SHFileOperationW(ctypes.byref(op)) == 0 and not os.path.exists(path)
+
+    def save_clip(self):
+        """Hop Clipper saves the last moments, the same as pressing F8."""
+        u32.FindWindowW.restype = wt.HWND
+        h = u32.FindWindowW("clipper-tray", None)
+        if not h:
+            return False
+        return bool(u32.PostMessageW(h, 0x0312, 1, 0))                    # WM_HOTKEY 1 = F8
+
     def clipboard_loop(self):
         """Text you copy, kept in MEMORY only for the clipboard-history button
         (password managers' private copies are skipped, see extras.Clipboard)."""
@@ -1451,10 +1482,23 @@ class Island:
         await self._refresh()
 
     def _pick_session(self):
+        """The music to show: whatever is PLAYING wins (Spotify first if several
+        are), so a YouTube video in Brave shows even with Spotify paused; with
+        nothing playing, Spotify, then Windows' own pick."""
         sessions = list(self.manager.get_sessions())
-        for s in sessions:
-            if "spotify" in (s.source_app_user_model_id or "").lower():
-                return s
+
+        def playing(s):
+            try:
+                return int(s.get_playback_info().playback_status) == 4      # PLAYING
+            except Exception:
+                return False
+        live = [s for s in sessions if playing(s)]
+        for pool in (live, sessions):
+            for s in pool:
+                if "spotify" in (s.source_app_user_model_id or "").lower():
+                    return s
+            if pool is live and live:
+                return live[0]
         return self.manager.get_current_session() or (sessions[0] if sessions else None)
 
     def _watch(self, session):
@@ -2129,6 +2173,15 @@ class IslandApi(features.FeatureApi):
 
     def open_clips_folder(self):
         return self._i.open_clips_folder()
+
+    def all_clips(self):
+        return self._i.all_clips()
+
+    def delete_clip(self, path):
+        return self._i.delete_clip(path)
+
+    def save_clip(self):
+        return self._i.save_clip()
 
     def get_sys(self):
         return extras.sys_stats()
