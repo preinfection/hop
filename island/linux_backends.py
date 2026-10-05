@@ -335,12 +335,11 @@ AUTOSTART = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME,
 
 
 def set_autostart(name, command, on):
+    """Start on login, or not. The packages start Hop for everyone from
+    /etc/xdg/autostart; a user's own file of the same name wins, so "off" is
+    a hidden entry rather than no file."""
     path = os.path.join(AUTOSTART, f"{name.lower().replace(' ', '-')}.desktop")
-    if not on:
-        if os.path.exists(path):
-            os.remove(path)
-        return
     os.makedirs(AUTOSTART, exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
-        fh.write(f"[Desktop Entry]\nType=Application\nName={name}\nExec={command}\nIcon=hop\n"
-                 "X-GNOME-Autostart-enabled=true\nNoDisplay=false\nTerminal=false\n")
+        fh.write(f"[Desktop Entry]\nType=Application\nName={name}\nExec={command}\nIcon=hop\nTerminal=false\n"
+                 f"X-GNOME-Autostart-enabled={'true' if on else 'false'}\nHidden={'false' if on else 'true'}\n")

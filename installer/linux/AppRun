@@ -1,0 +1,33 @@
+#!/bin/sh
+# Hop as one AppImage: Hop Island, with Hop Clipper started beside it.
+#   Hop-x.y.z-x86_64.AppImage                  start Hop (both apps)
+#   Hop-x.y.z-x86_64.AppImage --clipper --save save a clip (for a keyboard shortcut)
+# The first start adds Hop to your app menu and to start on login.
+HERE="$(dirname "$(readlink -f "$0")")"
+export HOP_ROOT="$HERE/usr/lib/hop"
+export PYTHONPATH="$HOP_ROOT/vendor${PYTHONPATH:+:$PYTHONPATH}"
+if ! python3 -c 'import gi; gi.require_version("WebKit2", "4.1"); from gi.repository import WebKit2' 2>/dev/null; then
+  echo "Hop needs GTK's WebKit for Python. Install these, then start Hop again:" >&2
+  echo "  Debian/Ubuntu: sudo apt install python3-gi gir1.2-webkit2-4.1 python3-tk python3-pil.imagetk python3-numpy python3-psutil ffmpeg playerctl" >&2
+  echo "  Fedora:        sudo dnf install python3-gobject webkit2gtk4.1 python3-tkinter python3-pillow-tk python3-numpy python3-psutil ffmpeg-free playerctl" >&2
+  echo "  Arch:          sudo pacman -S python-gobject webkit2gtk-4.1 tk python-pillow python-numpy python-psutil ffmpeg playerctl" >&2
+  exit 1
+fi
+if [ "$1" = "--clipper" ]; then
+  shift
+  exec python3 "$HOP_ROOT/clipper/clipper.py" "$@"
+fi
+if [ -n "$APPIMAGE" ]; then
+  apps="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+  auto="${XDG_CONFIG_HOME:-$HOME/.config}/autostart"
+  icons="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/256x256/apps"
+  if [ ! -f "$apps/hop.desktop" ]; then
+    mkdir -p "$apps" "$auto" "$icons"
+    cp "$HERE/hop.png" "$icons/hop.png"
+    for f in "$apps/hop.desktop" "$auto/hop.desktop"; do
+      printf '[Desktop Entry]\nType=Application\nName=Hop\nComment=An island at the top of your screen and an F8 clipper\nExec="%s"\nIcon=hop\nTerminal=false\nCategories=Utility;AudioVideo;\n' "$APPIMAGE" > "$f"
+    done
+  fi
+fi
+python3 "$HOP_ROOT/clipper/clipper.py" >/dev/null 2>&1 &
+exec python3 "$HOP_ROOT/island/host.py" "$@"

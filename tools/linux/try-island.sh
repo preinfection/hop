@@ -23,7 +23,7 @@ dbus-run-session -- bash -c "
   python3 '$HOP/tools/linux/fake-mpris.py' &
   MP=\$!
   sleep 1
-  cd '$HOP/island' && timeout $SECS '$PY' host.py > '$OUT/island.out' 2>&1 &
+  if [ -n \"\${HOP_CMD:-}\" ]; then timeout $SECS \$HOP_CMD > '$OUT/island.out' 2>&1 & else cd '$HOP/island' && timeout $SECS '$PY' host.py > '$OUT/island.out' 2>&1 & fi
   IS=\$!
   sleep $((SECS - 8))
   import -window root '$OUT/screen.png'

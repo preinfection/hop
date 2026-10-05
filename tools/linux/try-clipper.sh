@@ -26,14 +26,15 @@ def f():
 f(); r.mainloop()\" &
   BG=\$!
   sleep 1
-  cd '$HOP/clipper' && '$PY' clipper.py > '$OUT/clipper.out' 2>&1 &
+  RUN=\${CLIP_CMD:-\"'$PY' '$HOP/clipper/clipper.py'\"}
+  eval \$RUN > '$OUT/clipper.out' 2>&1 &
   CP=\$!
   sleep 14
-  '$PY' clipper.py --save; echo \"save sent: \$?\"
+  eval \$RUN --save; echo \"save sent: \$?\"
   sleep 2
   import -window root '$OUT/toast.png'
   sleep 6
-  '$PY' clipper.py --quit; echo \"quit sent: \$?\"
+  eval \$RUN --quit; echo \"quit sent: \$?\"
   sleep 3
   kill \$CP \$WM \$BG 2>/dev/null
 "

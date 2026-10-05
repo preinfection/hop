@@ -1,0 +1,6 @@
+# Hop on Linux, run from source (pip install -r requirements-linux.txt inside a
+# venv made with --system-site-packages). GTK, WebKit, Pillow, numpy, psutil and
+# cffi come from your distro: see https://gethop.lol/docs/install/linux
+pywebview>=6.2
+SoundCard>=0.4.3
+pynput>=1.7
