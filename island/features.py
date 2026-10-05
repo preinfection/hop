@@ -831,8 +831,11 @@ class Features:
                 if g != self.gaming:
                     self.gaming = g
                     self.js("game", g)
-            if tick % max(2, int(6 * slow)) == 0:
-                f = focus_on()
+            if tick % max(1, int(2 * slow)) == 0:
+                # focus: Windows focus, or (Settings -> Focus) any full-screen app or one of the picked apps
+                f = focus_on() or (bool(L.get("focusAuto", True)) and (
+                    (L.get("focusFullscreen", True) and self.gaming) or
+                    (getattr(self, "_exe", "") in (L.get("focusApps") or []))))
                 if f != focus:
                     focus = f
                     self.js("focus", f)
@@ -867,6 +870,7 @@ class Features:
         """The app in front: hide the island in chosen apps, and switch
         profiles by app."""
         exe = watch.foreground_exe()
+        self._exe = exe
         hide = exe in (L.get("hideApps") or [])
         if hide != self.hidden_for_app and self.i.window:
             self.hidden_for_app = hide

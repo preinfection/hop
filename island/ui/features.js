@@ -245,7 +245,8 @@
       if (kind === "agent" && state.agents.some((s) => s.status === "ask") && !H.cardOn() && now() - (state.askSince || 0) > 4000) {
         text = "Agent waiting"; color = "var(--hop-orange)"; pulse = true; break;
       }
-      if (kind === "focus" && state.focus) { text = "Focus"; color = "var(--hop-purple)"; break; }
+      // a song playing wins over the word "Focus": the music stays on the pill
+      if (kind === "focus" && state.focus && !island.classList.contains("playing")) { text = "Focus"; color = "var(--hop-purple)"; break; }
     }
     if (live.textContent !== text) live.textContent = text;
     live.style.setProperty("--live-c", color);
@@ -294,7 +295,6 @@
   const SOUND_OK = new Set(["tick", "pop", "chime", "bell"]);
   function quietNow() {
     const Lx = L();
-    if (Lx.quietInFocus && state.focus) return true;
     if (!Lx.quiet) return false;
     const t = hm(new Date(now())), a = Lx.quietFrom, b = Lx.quietTo;
     return a === b ? false : a < b ? t >= a && t < b : t >= a || t < b;
@@ -313,13 +313,33 @@
     if (!P.on) return false;
     const urgent = kind === "timer" || kind === "agent";
     if (!urgent && quietNow()) return false;
-    if (!urgent && state.gaming && L().gameMode) { state.held.push([kind, html, w, h, after, opts]); return false; }
+    // focus holds pop-ups until it ends (AI agents too, unless they're let through)
+    const Lf = L(), holdAgent = kind === "agent" && Lf.focusAgents === false;
+    if ((!urgent || holdAgent) && state.focus && Lf.focusHold !== false) { state.held.push([kind, html, w, h, after, opts]); return false; }
     H.showCard(html, w, h, opts.sticky ? 0 : P.ms, after);
-    if (SOUND_OK.has(P.sound) && !quietNow()) call("sound", P.sound);
+    if (SOUND_OK.has(P.sound) && !quietNow() && !(state.focus && Lf.focusMute !== false)) call("sound", P.sound);
     idleReset();
     return true;
   }
   window.__hopPopup = popup;                   // for extensions and the demo
+  // what focus changes while it's on (Settings -> Focus)
+  function focusLook() {
+    const Lf = L(), on = state.focus;
+    island.classList.toggle("focusing", on);
+    island.classList.toggle("f-still", on && Lf.focusBars === false);
+    island.classList.toggle("f-dim", on && !!Lf.focusDim);
+    island.classList.toggle("f-motion", on && !!Lf.focusMotion);
+    island.classList.toggle("f-big", on && !!Lf.focusBig);
+  }
+  H.focusLook = focusLook;
+  // pop-ups held during focus: all at once when it ends
+  function releaseHeld(where) {
+    if (!state.held.length) return;
+    const held = state.held.splice(0);
+    const P = (L().popups || {}).game;
+    if (P && P.on && held.length > 1) simpleCard("game", "moon", "#c7c7cc", `${held.length} pop-ups ${where}`, "They are on the Notifications page", "Focus");
+    else { const [k, html, w, h, after, o] = held[held.length - 1]; popup(k, html, w, h, after, { ...o, history: null }); }
+  }
 
   // ---- a short activity on the closed pill (caps lock, Wi-Fi, focus, an agent's edit)
   let actTimer = 0;
@@ -1225,7 +1245,7 @@
     game: (on) => {
       state.gaming = !!on;
       island.classList.toggle("gaming", state.gaming);
-      if (!on && state.held.length) {
+      if (!on && !state.focus && state.held.length) {
         const held = state.held.splice(0);
         const P = (L().popups || {}).game;
         if (P && P.on && held.length > 1) simpleCard("game", "device-gamepad-2", "#c7c7cc", `${held.length} pop-ups while you played`, "They are on the Notifications page", "Game mode");
@@ -1233,7 +1253,10 @@
       }
     },
     focus: (on) => {
+      if (state.focus === !!on) return;
       state.focus = !!on;
+      focusLook();
+      if (!on) setTimeout(() => releaseHeld("while you were in focus"), 2400);
       activity("focus", 150, `<div class="side"><span style="color:var(--hop-purple);display:flex">${ICON("moon", 16)}</span><span>Focus</span></div><div class="side"><span class="dim">${on ? "On" : "Off"}</span></div>`, 2200);
       liveTick();
     },
@@ -1273,6 +1296,7 @@
   // ================================================================ APPLY THE SETTINGS
   window.__hopApply = (Lx) => {
     applyLook(Lx);
+    focusLook();
     requestAnimationFrame(() => dots.classList.toggle("many", dots.children.length > 7));
     applySlots(Lx);
     paintPrivacy();

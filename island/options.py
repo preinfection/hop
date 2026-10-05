@@ -97,6 +97,10 @@ SPEC = {
     "popups": ("popups", None),
     "quiet": _bool(False), "quietFrom": ("time", "23:00"), "quietTo": ("time", "07:00"),
     "quietInFocus": _bool(True), "gameMode": _bool(True),
+    # ---- focus: what turns it on (besides Windows focus), and what it changes while it's on
+    "focusAuto": _bool(True), "focusFullscreen": _bool(True), "focusApps": ("exes", []),
+    "focusHold": _bool(True), "focusAgents": _bool(True), "focusBars": _bool(True), "focusMute": _bool(True),
+    "focusDim": _bool(False), "focusMotion": _bool(False), "focusBig": _bool(False),
     "hideApps": ("exes", []),
     # ---- where it is
     "monitor": _enum("primary", "primary", "cursor", "fixed"), "monitorIndex": _int(0, 0, 8),

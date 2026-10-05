@@ -106,10 +106,21 @@
       R.html(`<div id="popTable"></div>`),
       R.sw("quiet", "Quiet hours", "No pop-ups or sounds (timers and agents still come through)"),
       R.time2("quietFrom", "quietTo", "From", ""),
-      R.sw("quietInFocus", "Quiet during Windows focus", ""),
-      R.sw("gameMode", "Game mode", "In full-screen games pop-ups wait until you leave; nothing animates"),
     ]],
-    ["s-agents", "AI agents", "s-popsettings", [
+    ["s-focus", "Focus", "s-popsettings", [
+      R.html(`<div class="item"><div class="label"><b>Windows focus always counts</b><span>Turning on Do not disturb in Windows turns on Hop's focus too</span></div></div>`),
+      R.sw("focusAuto", "Turn focus on by itself", "In the apps below, and off again when you leave them"),
+      R.sw("focusFullscreen", "In any full-screen app", "Games, videos and presentations that fill the screen"),
+      R.html(`<div id="focusApps"></div><div class="item" data-row="focusPicks" style="display:block"><div class="label" style="margin-bottom:10px"><b>Quick add</b><span>Click to add or remove</span></div><div class="chips" id="focusPicks" style="flex-wrap:wrap"></div></div>`),
+      R.sw("focusHold", "Hold pop-ups until focus ends", "You get them all at once afterwards (timers always come through)"),
+      R.sw("focusAgents", "Let AI agents through", "Claude Code asking for permission still pops up"),
+      R.sw("focusBars", "Keep the music moving", "The bars on the pill keep dancing to the song"),
+      R.sw("focusMute", "Mute Hop's sounds", "No pop-up or alarm sounds during focus"),
+      R.sw("focusDim", "Dim the island", "Half see-through, so it never distracts"),
+      R.sw("focusMotion", "Reduce motion", "No animations at all during focus"),
+      R.sw("focusBig", "Bigger, high-contrast pill", "Larger bold text and a white edge, easier to read at a glance"),
+    ]],
+    ["s-agents", "AI agents", "s-focus", [
       R.html(`<div class="item"><div class="label"><b>Claude Code</b><span id="agState">Checking…</span></div><button class="btn primary" id="agConnect">Connect</button></div>`),
       R.sw("agentsOn", "Agent cards", "Status on the AI agents page and pop-ups when one needs you"),
       R.sw("agentApprove", "Approve from the island", "Allow / Deny permission requests without switching windows"),
@@ -630,8 +641,9 @@
 
   // ---------------------------------------------------------------- small list editors
   function listEditor(box, key, title, hint, fields, blank) {
-    const items = S.L[key] || [];
-    $(box).innerHTML = `<div class="item"><div class="label"><b>${esc(title)}</b><span>${esc(hint)}</span></div>${key === "hideApps" ? '<input class="field" id="hideIn" placeholder="app.exe" style="max-width:150px">' : ""}<button class="btn" data-add="${key}">Add</button></div>` +
+    const items = asObjs(key, S.L[key] || []);                                    // app lists are names: the editor works on objects
+    const exes = key === "hideApps" || key === "focusApps";
+    $(box).innerHTML = `<div class="item"><div class="label"><b>${esc(title)}</b><span>${esc(hint)}</span></div>${exes ? `<input class="field" id="${key}In" placeholder="app.exe" style="max-width:150px">` : ""}<button class="btn" data-add="${key}">Add</button></div>` +
       items.map((it, i) => `<div class="item" data-li="${i}">${fields.map(([f, type, ph, opts]) => type === "select"
         ? `<select class="field" data-lk="${key}" data-lf="${f}" data-li="${i}">${opts.map(([v, n]) => `<option value="${v}" ${String(it[f]) === v ? "selected" : ""}>${esc(n)}</option>`).join("")}</select>`
         : type === "check" ? `<label class="sw"><input type="checkbox" data-lk="${key}" data-lf="${f}" data-li="${i}" ${it[f] !== false ? "checked" : ""}><i></i></label>`
@@ -645,20 +657,35 @@
     listEditor("reminders", "reminders", "Reminders", "A pop-up every few minutes between two times", [["text", "text", "Drink water"], ["every", "number", "min"], ["from", "time"], ["to", "time"], ["on", "check"]], { text: "Stretch", every: 45, from: "09:00", to: "21:00", on: true });
     listEditor("teams", "teams", "Your teams", "The Scores page and goal pop-ups", [["league", "select", "", LEAGUES], ["team", "text", "Team name, e.g. Arsenal"]], { league: "epl", team: "Arsenal" });
     listEditor("hideApps", "hideApps", "Hide in these apps", "The island steps aside while one of these is in front (e.g. powerpnt.exe)", [["exe", "text", "app.exe"]], { exe: "" });
+    listEditor("focusApps", "focusApps", "In these apps", "Focus turns on while one of these is in front, full screen or not", [["exe", "text", "app.exe"]], { exe: "" });
+    renderFocusPicks(L);
   }
+  // one-click picks for focus's app list
+  const FOCUS_PICKS = [["Roblox", "robloxplayerbeta.exe"], ["Claude Code", "windowsterminal.exe"], ["Minecraft", "javaw.exe"], ["Valorant", "valorant-win64-shipping.exe"],
+    ["Fortnite", "fortniteclient-win64-shipping.exe"], ["Counter-Strike 2", "cs2.exe"], ["Visual Studio Code", "code.exe"], ["Word", "winword.exe"]];
+  function renderFocusPicks(L) {
+    const on = new Set(L.focusApps || []);
+    $("focusPicks").innerHTML = FOCUS_PICKS.map(([n, exe]) => `<button class="chip ${on.has(exe) ? "on" : ""}" data-fp="${exe}" title="${esc(exe)}">${esc(n)}</button>`).join("");
+  }
+  $("focusPicks").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-fp]"); if (!b) return;
+    const exe = b.dataset.fp, list = S.L.focusApps || [];
+    S.change({ focusApps: list.includes(exe) ? list.filter((x) => x !== exe) : [...list, exe] });
+  });
   // hideApps is a list of names; the editor works on objects
-  const asObjs = (key, v) => key === "hideApps" ? v.map((exe) => ({ exe })) : v;
-  const fromObjs = (key, v) => key === "hideApps" ? v.map((o) => o.exe).filter(Boolean) : v;
+  const EXES = new Set(["hideApps", "focusApps"]);
+  const asObjs = (key, v) => EXES.has(key) ? v.map((exe) => ({ exe })) : v;
+  const fromObjs = (key, v) => EXES.has(key) ? v.map((o) => o.exe).filter(Boolean) : v;
   panel.addEventListener("click", (e) => {
     const add = e.target.closest("[data-add]"), del = e.target.closest("[data-del]");
     if (add) {
       const key = add.dataset.add, box = add.closest("[id]");
       const blank = JSON.parse(box.dataset.blank);
-      if (key === "hideApps") {
-        const name = ($("hideIn").value || "").trim().toLowerCase();
-        if (!/^[\w .()+-]{1,80}\.exe$/i.test(name)) { S.status("Type the app's .exe name, e.g. powerpnt.exe"); return; }
-        $("hideIn").value = "";
-        S.change({ hideApps: [...S.L.hideApps, name] });
+      if (EXES.has(key)) {
+        const inp = $(key + "In"), name = (inp.value || "").trim().toLowerCase();
+        if (!/^[\w .()+-]{1,80}\.exe$/i.test(name)) { S.status("Type the app's .exe name, e.g. robloxplayerbeta.exe"); return; }
+        inp.value = "";
+        S.change({ [key]: [...(S.L[key] || []).filter((x) => x !== name), name] });
         return;
       }
       S.change({ [key]: [...asObjs(key, S.L[key]), blank] });

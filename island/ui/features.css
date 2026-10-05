@@ -31,7 +31,7 @@
   background: var(--isl-bg);
   border-radius: var(--r-closed);
   font-family: var(--isl-font);
-  box-shadow: var(--isl-ring), var(--isl-glow);
+  box-shadow: var(--isl-glow);
   /* SMOOTH OPEN: the island's own layout is kept to itself, and the height
      eases without a spring (the old spring made the bottom edge wobble for
      ~0.4 s after the hover delay, which read as a slow, visible resize) */
@@ -105,8 +105,21 @@ html.motion-reduced .bars i, html.motion-reduced .rec-dot, html.motion-reduced .
 .island.idle-line:not(.open):not(.carding):not(.act) { height: 5px; width: calc(var(--w) * 0.55); }
 .island.idle-line:not(.open):not(.carding):not(.act) > * { opacity: 0 !important; }
 .island.idle-fade:not(.open):not(.carding):not(.act) { opacity: 0.22; }
-/* game mode: just the pill, nothing animates */
-.island.gaming:not(.open) .bars i { animation: none !important; }
+/* the outline: drawn ON TOP of everything inside, glued to the island's own edge,
+   so it is the right size and colour on every frame of opening and closing
+   (as an inset shadow it sat under the open view and only showed once that
+   had settled, ~0.4 s later) */
+.island::after {
+  content: ""; position: absolute; inset: 0; z-index: 60; pointer-events: none;
+  border-radius: inherit; box-shadow: var(--isl-ring);
+}
+.island.focusing.f-big:not(.open)::after { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.85); }
+/* focus (Settings -> Focus): the music keeps moving unless you stop it, and
+   its accessibility options: dimmer, no motion, bigger high-contrast text */
+.island.focusing.f-still:not(.open) .bars i { animation: none !important; }
+.island.focusing.f-dim:not(.open):not(.carding) { opacity: 0.5; }
+.island.focusing.f-motion, .island.focusing.f-motion * { transition-duration: 0s !important; animation: none !important; }
+.island.focusing.f-big:not(.open) .clock, .island.focusing.f-big:not(.open) .live-text { font-size: 15px; font-weight: 700; color: #fff; }
 
 /* ---- shuffle / repeat beside the play controls */
 .controls .sr { width: 28px; height: 28px; color: var(--faint); }
