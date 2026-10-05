@@ -49,9 +49,25 @@ def font(size, weight="regular"):
             f = ImageFont.truetype(os.path.join(FONTS, "SegUIVar.ttf"), size)
             f.set_variation_by_axes([600 if weight == "semibold" else 400, 12 if size <= 13 else 36][: len(f.get_variation_axes())])
         except Exception:
-            f = ImageFont.truetype(os.path.join(FONTS, "seguisb.ttf" if weight == "semibold" else "segoeui.ttf"), size)
+            try:
+                f = ImageFont.truetype(os.path.join(FONTS, "seguisb.ttf" if weight == "semibold" else "segoeui.ttf"), size)
+            except Exception:
+                f = _system_font(size, weight)               # Linux: the desktop's own sans font
         _font_cache[key] = f
     return _font_cache[key]
+
+
+def _system_font(size, weight):
+    """Linux: fontconfig's sans (Inter, Cantarell, Ubuntu, Noto, DejaVu...)."""
+    import subprocess
+    try:
+        path = subprocess.run(["fc-match", "-f", "%{file}", f"sans:weight={'demibold' if weight == 'semibold' else 'regular'}"],
+                              capture_output=True, text=True, timeout=3).stdout.strip()
+        if path:
+            return ImageFont.truetype(path, size)
+    except Exception:
+        pass
+    return ImageFont.load_default(size)
 
 
 def bunny(px):

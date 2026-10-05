@@ -114,6 +114,38 @@ def foreground_exe():
     return m.group(1).lower() if m else ""
 
 
+def app_label():
+    """The app in front as a clip name: 'Roblox', 'Firefox', 'Minecraft'..."""
+    w = _active_window()
+    if not w:
+        return ""
+    m = re.search(r'"([^"]*)",\s*"([^"]*)"', _run(["xprop", "-id", w, "WM_CLASS"]))
+    name = (m.group(2) or m.group(1)) if m else ""
+    if not name or name.lower() in ("host.py", "clipper.py", "hop island", "hop-island", "hop-clipper", "xfdesktop", "desktop_window"):
+        return ""
+    if name.lower().startswith("steam_app_"):                    # Steam games: their window title
+        t = re.search(r'= "(.*)"', _run(["xprop", "-id", w, "_NET_WM_NAME"]))
+        return t.group(1)[:40] if t else "Steam game"
+    known = {"robloxplayerbeta": "Roblox", "sober": "Roblox", "minecraft": "Minecraft", "code": "VS Code", "firefox": "Firefox",
+             "google-chrome": "Chrome", "brave-browser": "Brave", "discord": "Discord", "steam": "Steam"}
+    return known.get(name.lower(), name[:1].upper() + name[1:])
+
+
+def screen_size():
+    m = re.search(r"dimensions:\s+(\d+)x(\d+)", _run(["xdpyinfo"]))
+    return (int(m.group(1)), int(m.group(2))) if m else (1920, 1080)
+
+
+def workarea():
+    """The usable screen area (minus panels) as (left, top, right, bottom)."""
+    nums = re.findall(r"\d+", _run(["xprop", "-root", "_NET_WORKAREA"]).split("=", 1)[-1])
+    if len(nums) >= 4:
+        x, y, w, h = map(int, nums[:4])
+        return x, y, x + w, y + h
+    w, h = screen_size()
+    return 0, 0, w, h
+
+
 def fullscreen_app():
     """A full-screen window in front (a game, a video, a presentation)."""
     w = _active_window()

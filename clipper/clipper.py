@@ -34,6 +34,16 @@ AUDIO
   inaudibly (see audio_pump); short hold-ups are never padded with silence.
   Set MIC = True to mix your microphone in too.
 """
+import os
+import sys
+LINUX = sys.platform.startswith("linux")
+if LINUX:
+    # the island's folder holds hop_linux (stands in for the Windows calls) and linux_backends
+    for _d in (os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "island"), os.path.dirname(os.path.abspath(__file__))):
+        if os.path.exists(os.path.join(_d, "hop_linux.py")) and _d not in sys.path:
+            sys.path.insert(0, _d)
+    import hop_linux  # noqa: F401
+    import linux_backends
 import ctypes
 import ctypes.wintypes as wt
 import datetime
@@ -122,7 +132,7 @@ def find_tool(name):
     return shutil.which(name) or name
 
 
-FFMPEG = find_tool("ffmpeg.exe")
+FFMPEG = find_tool("ffmpeg" if LINUX else "ffmpeg.exe")
 ICON, BUNNY, CLICK = (os.path.join(HERE, n) for n in ("bunny.ico", "bunny.png", "click.wav"))
 RING = os.path.join(os.environ["TEMP"], "clipper-ring")
 HOLD = os.path.join(os.environ["TEMP"], "clipper-hold")
@@ -132,7 +142,7 @@ PIECES = LONGEST // SEG + 3               # ring: a bit over the longest clip
 RATE, CH, BLOCK = 48000, 2, 960           # 20 ms audio blocks
 CAPTURE_LAG_S = 0.08                      # picture capture latency; see start_ffmpeg
 
-warnings.filterwarnings("ignore", category=sc.SoundcardRuntimeWarning)
+warnings.filterwarnings("ignore", category=getattr(sc, "SoundcardRuntimeWarning", RuntimeWarning))   # Windows-only class
 NO_WINDOW = 0x08000000
 try:
     ctypes.windll.shcore.SetProcessDpiAwareness(2)   # crisp toast on scaled displays
@@ -561,8 +571,10 @@ def start_ffmpeg(audio_t0, ring_dir, hwnd=None):
     -itsoffset. -copyts stalled the recorder after 4-5 frames whenever the
     audio pipe was attached (bisected), so it is not used.
     """
-    sw, sh = u32.GetSystemMetrics(0), u32.GetSystemMetrics(1)
-    if hwnd:
+    sw, sh = linux_backends.screen_size() if LINUX else (u32.GetSystemMetrics(0), u32.GetSystemMetrics(1))
+    if LINUX:
+        src = "x11grab"                     # Linux: the whole X screen (XWayland apps too on Wayland)
+    elif hwnd:
         # Always monitor-sized, so pieces from window and monitor runs join cleanly.
         src = f"gfxcapture=hwnd={hwnd}:width={sw}:height={sh}:resize_mode=scale_aspect"
     else:
@@ -596,7 +608,9 @@ def start_ffmpeg(audio_t0, ring_dir, hwnd=None):
         # see, so its clips came out frozen with the odd jump (2026-09-27). This
         # is the capture OBS uses for such games, and it also costs less (~1% vs
         # ~3%): it only hands over a frame when the screen actually changed.
-        "-f", "lavfi", "-i", f"{src}:max_framerate={fps}:capture_cursor={int(cfg['cursor'])}",
+        *(["-thread_queue_size", "512", "-f", "x11grab", "-draw_mouse", str(int(cfg["cursor"])), "-framerate", str(fps), "-video_size", f"{sw}x{sh}",
+            "-i", f"{os.environ.get('DISPLAY', ':0')}+0,0"] if LINUX else
+          ["-f", "lavfi", "-i", f"{src}:max_framerate={fps}:capture_cursor={int(cfg['cursor'])}"]),
         "-f", "f32le", "-ar", str(RATE), "-ac", str(CH * 2 if MIC_TRACK else CH), "-i", "pipe:0",
         "-i", WATERMARK,                           # one frame; overlay repeats it forever
         # THE WATERMARK IS BURNT IN WHILE RECORDING, so saving stays a stream
@@ -618,7 +632,8 @@ def start_ffmpeg(audio_t0, ring_dir, hwnd=None):
         # 3-5 s before F8, ffmpeg at 1 GB). fps runs after the conversion, so
         # a copy costs only the encoder's cheap skip.
         "-filter_complex", audio_split + f"[0:v]setpts='if(eq(N,0),(RTCTIME-{t0_us})/(1000000*TB),PREV_OUTPTS+PTS-PREV_INPTS)',"
-                           f"hwdownload,format=bgra,scale=out_color_matrix=bt709:out_range=tv,format=yuv420p[v];"
+                           + ("" if LINUX else "hwdownload,format=bgra,") +
+                           "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p[v];"
                            # Converted to YUV straight after the download, before the
                            # watermark and fps: benchmarked under a game-level GPU load,
                            # 17-21 -> ~30 real fps at the same CPU.
@@ -1124,7 +1139,7 @@ def cut(snap, seconds, stamp, game=None):
     return out if ok else None
 
 
-FFPROBE = find_tool("ffprobe.exe")
+FFPROBE = find_tool("ffprobe" if LINUX else "ffprobe.exe")
 
 
 def _probe(args):
@@ -2368,4 +2383,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if LINUX:
+        sys.modules.setdefault("clipper", sys.modules[__name__])
+        import clipper_linux
+        clipper_linux.main()
+    else:
+        main()

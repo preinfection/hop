@@ -132,6 +132,7 @@ class Win:
     """Set by the Linux host once pywebview's GTK window exists. Every call
     runs on the GTK thread and waits for its answer (at most a second)."""
     gtk = None            # Gtk.Window
+    tk = None             # Hop Clipper's Tk root (it has no GTK window)
     shape = None          # the click region (l, t, r, b), window-relative px
     pos = (0, 0)
     size = (0, 0)
@@ -285,7 +286,13 @@ class _User32(_Nothing):
         return 1
 
     def _GetCursorPos(self, p):
-        x, y, _ = Win.pointer()
+        if Win.gtk is None and Win.tk is not None:                  # Hop Clipper: no GTK, its Tk knows
+            try:
+                x, y = Win.tk.winfo_pointerxy()
+            except Exception:
+                x, y = 0, 0
+        else:
+            x, y, _ = Win.pointer()
         o = _out(p)
         o.x, o.y = x, y
         return 1
@@ -344,6 +351,14 @@ class _User32(_Nothing):
         except Exception:
             pass
         return 1
+
+    def _PeekMessageW(self, *a):
+        return 0
+
+    def _MsgWaitForMultipleObjects(self, n, handles, wait_all, ms, mask):
+        import time
+        time.sleep(max(0, int(ms)) / 1000)                            # a message loop's wait, without the messages
+        return 0x102
 
     def _GetSystemMetrics(self, i):
         l, t, r, b = Win.workarea()
